@@ -101,10 +101,10 @@ class LogitorBackboneFactory(Factory):
 
         _C = config
         kwargs = {
-            "visual_feature_size": _C.DISCRIMINATOR.FEATURE_SIZE,
+            "visual_feature_size": _C.DISCRIMINATOR.VISUAL.FEATURE_SIZE,
             "cond_size": _C.TEXT_ENCODER.EMBEDDING_SIZE,
         }
-        return cls.create(_C.LOGITOR.NAME, **kwargs)
+        return cls.create(_C.DISCRIMINATOR.LOGITOR.NAME, **kwargs)
 
 
 class GeneratorFactory(Factory):
@@ -136,7 +136,7 @@ class GeneratorFactory(Factory):
             "img_size": _C.DATA.IMAGE_CROP_SIZE 
         }
 
-        if "style" in _C.MODEL.VISUAL.NAME:
+        if "style" in _C.GENERATOR.NAME:
             raise NotImplementedError
             #kwargs["pretrained"] = _C.MODEL.VISUAL.PRETRAINED
             return cls.create(_C.GENERATOR.NAME, **kwargs)
@@ -153,7 +153,7 @@ class DiscriminatorFactory(Factory):
     PRODUCTS: Dict[str, Callable] = {
         # First two are basically the same. Added for shorthand notation.
         "capD": vmodels.CapD,
-        "df": vmodels.DF_DISC,
+        "df": vmodels.DF_D,
     }
 
     @classmethod
@@ -362,6 +362,11 @@ class PretrainingDatasetFactory(Factory):
                 image_transform_list.append(ImageTransformsFactory.create(name))
 
         kwargs["image_transform"] = alb.Compose(image_transform_list)
+        tokenizer = TokenizerFactory.from_config(_C)
+        kwargs.update(
+            tokenizer=tokenizer,
+            max_caption_length=_C.DATA.MAX_CAPTION_LENGTH,
+        )
 
         # Dataset names match with model names (and ofcourse pretext names).
         return cls.create("capD", **kwargs)
@@ -542,5 +547,5 @@ class OptimizerFactory(Factory):
         else:
             kwargs = {"betas": _C.BETAS}
 
-        optimizer = cls.create(_C.OPTIM.OPTIMIZER_NAME, param_groups, **kwargs)
+        optimizer = cls.create(_C.OPTIMIZER_NAME, param_groups, **kwargs)
         return optimizer

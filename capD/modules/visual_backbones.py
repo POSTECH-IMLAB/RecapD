@@ -4,6 +4,8 @@ import torch
 from torch import nn
 import torchvision
 
+import torch.nn.functional as F
+
 
 class VisualBackbone(nn.Module):
     r"""

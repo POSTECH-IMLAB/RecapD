@@ -29,9 +29,6 @@ DATA:
     - "center_crop"
     - "normalize"
 
-  USE_PERCENTAGE: 100.0
-  USE_SINGLE_CAPTION: false
-
 TEXT_ENCODER:
   NAME: "random"
   EMBEDDING_SIZE: 256
@@ -65,8 +62,8 @@ TRAIN:
 
 GAN_LOSS: 
   TYPE: "hinge"
-  D_LOSS_COMPONENT: "logit,magp,cap"
-  G_LOSS_COMPONENT: "logit,capfa"
+  D_LOSS_COMPONENT: "logit,magp"
+  G_LOSS_COMPONENT: "logit,fa"
   LOGIT_INPUT: "visual_features"
   FA_FEATURE: "visual_features"
 

@@ -75,7 +75,7 @@ class Config(object):
         _C.TEXT_ENCODER = CN()
         _C.TEXT_ENCODER.NAME = "random" # "random", "capD"
         _C.TEXT_ENCODER.DIR = "datasets/DAMSMencoders/text_encoder100.pth"
-        _C.TEXT_ENCODER.EMBEDDING_SIZE = "256"
+        _C.TEXT_ENCODER.EMBEDDING_SIZE = 256
         _C.TEXT_ENCODER.FROZEN = True 
 
         _C.GENERATOR = CN()
@@ -134,7 +134,7 @@ class Config(object):
         _C.OPTIM.G.SGD_MOMENTUM = 0.9
         _C.OPTIM.G.WIEGHT_DECAY = 0.0001
         _C.OPTIM.G.NO_DECAY = ""
-        _C.OPTIM.G.CLIP.GRAD_NORM = 10.0
+        _C.OPTIM.G.CLIP_GRAD_NORM = 10.0
         _C.OPTIM.G.LOOKAHEAD = CN()
         _C.OPTIM.G.LOOKAHEAD.USE = True
         _C.OPTIM.G.LOOKAHEAD.ALPHA = 0.5

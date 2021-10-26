@@ -6,7 +6,7 @@ from .captioning import (
 
 from .discriminator import (
     CapD,
-    DF_DISC
+    DF_D
 )
 
 

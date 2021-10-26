@@ -8,8 +8,8 @@ import torch.nn.functional as F
 def magp(img, sent, netD):
     img_inter = (img.data).requires_grad_()
     sent_inter= (sent.data).requires_grad_()
-    features = netD(img_inter)
-    out = netD.logitor(features, sent_inter)
+    output_dict = netD(img_inter)
+    out = netD.logitor(output_dict["visual_features"], sent_inter)
     grads = torch.autograd.grad(outputs=out,
                             inputs=(img_inter,sent_inter),
                             grad_outputs=torch.ones(out.size()).cuda(),
@@ -30,7 +30,7 @@ class GANLoss():
         self.d_loss_component = cfg.D_LOSS_COMPONENT.split(',')
         self.g_loss_component = cfg.G_LOSS_COMPONENT.split(',')
         self.logit_input = cfg.LOGIT_INPUT
-        self.logit_stop_grad = cfg.LOGIT_LOGIT_STOP_GRAD
+        self.logit_stop_grad = cfg.LOGIT_STOP_GRAD
         self.fa_feature = cfg.FA_FEATURE
 
     def compute_d_loss(self, batch, text_encoder, netG, netD) -> Dict[str, torch.Tensor]:
@@ -39,18 +39,23 @@ class GANLoss():
         with torch.no_grad():
             word_embeddings = text_encoder(batch["caption_tokens"])
             sent_embeddings = torch.sum(word_embeddings, dim=1)
-            sent_embeddings = sent_embeddings / batch["token_lengths"]
+            sent_embeddings = sent_embeddings / batch["caption_lengths"].unsqueeze(1)
             # normalize
             sent_embeddings = sent_embeddings * (sent_embeddings.square().mean(1, keepdim=True) + 1e-8).rsqrt()
 
         with torch.no_grad():
             fakes = netG(batch["z"], sent_embeddings) 
 
-        real_dict = netD(batch["image"], batch["caption_tokens"], batch["caption_lengths"], batch["noitpac_tokens"])
+        real_dict = netD(
+            image=batch["image"], 
+            caption_tokens=batch["caption_tokens"], 
+            caption_lengths=batch["caption_lengths"],
+            noitpac_tokens=batch["noitpac_tokens"]
+        )
         fake_dict = netD(fakes)
         if 'logit' in self.d_loss_component:
             real_output = netD.logitor(real_dict[self.logit_input], sent_embeddings)
-            mis_output = netD.logitor(real_dict[self.logit_input][:-2], sent_embeddings[1:])
+            mis_output = netD.logitor(real_dict[self.logit_input][:-1], sent_embeddings[1:])
             fake_output = netD.logitor(fake_dict[self.logit_input], sent_embeddings)
             if self.type == "hinge":
                 errD_real =  F.relu(1.0 - real_output).mean()
@@ -80,7 +85,7 @@ class GANLoss():
         loss = {}
         word_embeddings = text_encoder(batch["caption_tokens"])
         sent_embeddings = torch.sum(word_embeddings, dim=1)
-        sent_embeddings = sent_embeddings / batch["token_lengths"]
+        sent_embeddings = sent_embeddings / batch["caption_lengths"].unsqueeze(1)
         # normalize
         sent_embeddings = sent_embeddings * (sent_embeddings.square().mean(1, keepdim=True) + 1e-8).rsqrt()
 
@@ -115,12 +120,12 @@ class GANLoss():
             errG_fa = torch.abs(real_dict[self.fa_feature] - fake_dict[self.fa_feature]).mean()
             loss.update(errG_fa = errG_fa)
 
-        return loss
+        return loss, fakes
 
     def accumulate_loss(self, loss_dict):
         loss = 0.
-        for _, val in loss_dict:
-            loss += val
+        for key in loss_dict:
+            loss += loss_dict[key] 
         return loss
 
    

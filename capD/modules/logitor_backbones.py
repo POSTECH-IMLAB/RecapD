@@ -22,7 +22,7 @@ class DF_LOGIT(LogitorBackbone):
 
     def forward(self, x, c):
         c = c.view(c.size(0), -1 , 1, 1)
-        c = c.repeat(1, 1, c.size(-2),c.size(-1))
+        c = c.repeat(1, 1, x.size(-2), x.size(-1))
         x_c_code = torch.cat((x, c), dim=1)
         out = self.conv_joint(x_c_code)
         return out

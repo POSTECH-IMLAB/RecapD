@@ -29,6 +29,8 @@ class WordAndPositionalEmbedding(nn.Module):
         dropout: float = 0.0,
         max_caption_length: int = 30,
         padding_idx: int = 0,
+        frozen: bool = False,
+        **kwargs,
     ):
         super().__init__()
         self.vocab_size = vocab_size
@@ -43,6 +45,10 @@ class WordAndPositionalEmbedding(nn.Module):
             hidden_size, eps=1e-8, elementwise_affine=True
         )
         self.dropout = nn.Dropout(p=dropout)
+        if frozen:
+            self.eval()
+            self.requires_grad_(False)
+
 
     def forward(self, tokens: torch.Tensor) -> torch.Tensor:
         r"""
@@ -91,6 +97,7 @@ class DAMSM(nn.Module):
         max_caption_length,
         frozen = True,
         save_dir = 'datasets/DAMSMencoders/coco/text_encoder100.pth',
+        **kwargs,
         
     ):
         super().__init__()

@@ -102,6 +102,9 @@ class CheckpointManager(object):
 
         __state_dict: Dict[str, Any] = {}
         for key in self.checkpointables:
+            if self.checkpointables[key] is None:
+                continue
+            
             if isinstance(
                 self.checkpointables[key], nn.parallel.DistributedDataParallel
             ):
