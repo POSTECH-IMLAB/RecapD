@@ -51,9 +51,6 @@ DISCRIMINATOR:
   LOGITOR:
     NAME: "df"
 
-  TEXTUAL:
-    NAME: "transdec_postnorm::L1_H2048_A32_F8192"
-    DROPOUT: 0.1
 
 TRAIN:
   BATCH_SIZE: 64 
@@ -65,7 +62,6 @@ GAN_LOSS:
   D_LOSS_COMPONENT: "logit,magp"
   G_LOSS_COMPONENT: "logit"
   LOGIT_INPUT: "visual_features"
-  FA_FEATURE: "visual_features"
 
 OPTIM:
   G:
@@ -77,6 +73,5 @@ OPTIM:
   D:
     OPTIMIZER_NAME: "adam"
     VISUAL_LR: 0.0004
-    TEXT_LR: 0.00001
-    CLIP_GRAD_NORM: 10.0
+    BETAS: [0.0, 0.9]
     UPDATE_EMB: false
