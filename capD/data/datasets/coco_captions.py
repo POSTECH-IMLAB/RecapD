@@ -91,6 +91,7 @@ class CocoCaptionsDataset(Dataset):
             pickle.dump(damsm_tokens, f, protocol=2)
 
         print("Save damsm tokens")
+        return damsm_tokens
 
 
     def __len__(self):

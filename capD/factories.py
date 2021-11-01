@@ -31,6 +31,7 @@ from capD.config import Config
 from capD.data import transforms as T
 from capD.data.tokenizers import SentencePieceBPETokenizer
 from capD.modules import visual_backbones, textual_heads, generator_backbones, logitor_backbones, embedding
+from capD.modules.decoder import D_REC
 from capD.optim import Lookahead, lr_scheduler
 
 from capD.utils.beam_search import AutoRegressiveBeamSearch
@@ -176,6 +177,8 @@ class DiscriminatorFactory(Factory):
         visual = VisualBackboneFactory.from_config(_C)
         logitor = LogitorBackboneFactory.from_config(_C)
 
+        kwargs = {}
+
         if _C.DISCRIMINATOR.NAME in {"capD"}:
             textual = TextualHeadFactory.from_config(_C)
             kwargs = {
@@ -184,8 +187,10 @@ class DiscriminatorFactory(Factory):
                 "eos_index": _C.DATA.EOS_INDEX,
                 "decoder": CaptionDecoderFactory.from_config(_C),
             }
-        else:
-            kwargs = {}
+
+        if _C.DISCRIMINATOR.VISUAL.DECODER:
+            decoder = D_REC(_C.DISCRIMINATOR.LOGITOR.H)
+            kwargs["decoder"] = decoder
 
         return cls.create(_C.DISCRIMINATOR.NAME, visual, logitor, **kwargs)
 
@@ -456,7 +461,7 @@ class TextualHeadFactory(Factory):
         _C = config
         name = _C.DISCRIMINATOR.TEXTUAL.NAME
         kwargs = {
-            "visual_feature_size": _C.DISCRIMINATOR.VISUAL.FEATURE_SIZE,
+            "visual_feature_size": _C.DISCRIMINATOR.LOGITOR.H,
             "vocab_size": _C.DATA.VOCAB_SIZE,
         }
 

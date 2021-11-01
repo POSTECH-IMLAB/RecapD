@@ -70,14 +70,14 @@ class DF_DISC(VisualBackbone):
     def _define_arch(self):
         assert self.img_size in (64, 128, 256)
         if self.img_size == 256:
-            in_features = (1, 2, 4, 8, 16, 16)
-            out_features = (1, 2, 4, 8, 16, 16)
-        elif self.img_size == 128:
             in_features = (1, 2, 4, 8, 16)
             out_features = (1, 2, 4, 8, 16)
-        else:
+        elif self.img_size == 128:
             in_features = (1, 2, 4, 8)
             out_features = (1, 2, 4, 8)
+        else:
+            in_features = (1, 2, 4)
+            out_features = (1, 2, 4)
 
         return {
             "in_features": [3] + [self.visual_feature_size * i for i in in_features],

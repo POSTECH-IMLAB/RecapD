@@ -1,10 +1,13 @@
 import functools
 from typing import Dict
 import torch
+import torchvision.utils as vutils
 from torch import nn
 
 import torch.nn.functional as F
 from capD.modules.embedding import RNN_ENCODER
+
+import lpips
 
 def magp(img, sent, netD):
     img_inter = (img.data).requires_grad_()
@@ -33,6 +36,8 @@ class GANLoss():
         self.logit_input = cfg.LOGIT_INPUT
         self.logit_stop_grad = cfg.LOGIT_STOP_GRAD
         self.fa_feature = cfg.FA_FEATURE
+        if "img_rec" in self.d_loss_component:
+            self.perceptual_fn = lpips.LPIPS(net="vgg").cuda()
 
     def get_sent_embs(self, batch, text_encoder):
         if not isinstance(text_encoder, RNN_ENCODER):
@@ -79,7 +84,10 @@ class GANLoss():
             sent_embs = sent_embs.detach()
             fakes = netG(batch["z"], sent_embs) 
 
-        real_dict = netD(batch["image"], batch)
+        kwargs = {"image":batch["image"]} 
+        if "cap" in self.d_loss_component:
+            kwargs["batch"] = batch
+        real_dict = netD(**kwargs)
         fake_dict = netD(fakes)
         if "logit" in self.d_loss_component:
             real_output = netD.logitor(real_dict[self.logit_input], sent_embs)
@@ -102,11 +110,17 @@ class GANLoss():
             errD_cap = real_dict["cap_loss"]
             loss.update(errD_cap = 0.1 * errD_cap)
 
+        img_feat = None
         if "sent_contra" in self.d_loss_component:
             img_feat = netD.logitor.get_contra_img_feat(real_dict[self.logit_input])
             sent_feat = netD.logitor.get_contra_sent_feat(sent_embs)
             errD_sent = self.contra_loss(img_feat, sent_feat)
             loss.update(errD_sent = errD_sent)
+        
+        if "img_rec" in self.d_loss_component: 
+            rec = netD.decoder(real_dict[self.logit_input])
+            errD_rec = self.perceptual_fn(rec, batch["image"].detach()).mean()
+            loss.update(errD_rec = errD_rec)
 
         return loss
 
@@ -136,25 +150,23 @@ class GANLoss():
             errG_cap = fake_dict["cap_loss"]
             loss.update(errG_cap = 0.1 * errG_cap)
         
-        fake_feat = None
         if 'img_contra' in self.g_loss_component:
             kwargs = {"image":batch["image"]}
             if self.fa_feature == "projected_visual_features":
                 kwargs.update(batch=batch)
             with torch.no_grad():
                 real_dict = netD(**kwargs)
-                real_feat = netD.logitor.get_contra_img_feat(real_dict[self.logit_input])
-                real_feat = real_feat.detach()
-            fake_feat = netD.logitor.get_contra_img_feat(fake_dict[self.logit_input])
+                real_feat = F.adaptive_avg_pool2d(real_dict[self.logit_input], (1,1))
+                real_feat = real_feat.view(real_feat.size(0), -1).detach()
+            fake_feat = F.adaptive_avg_pool2d(fake_dict[self.logit_input], (1,1)).view(real_feat.size(0), -1)
             errG_img = self.contra_loss(fake_feat, real_feat) 
-            loss.update(errG_img = errG_img)
+            loss.update(errG_img = 0.2 * errG_img)
 
         if "sent_contra" in self.g_loss_component:
             with torch.no_grad():
                 sent_feat = netD.logitor.get_contra_sent_feat(sent_embs)
                 sent_feat = sent_feat.detach()
-            if fake_feat is None:
-                fake_feat = netD.logitor.get_contra_img_feat(fake_dict[self.logit_input])
+            fake_feat = netD.logitor.get_contra_img_feat(fake_dict[self.logit_input])
             errG_sent = self.contra_loss(fake_feat, sent_feat)
             loss.update(errG_sent = errG_sent)
 
