@@ -40,7 +40,7 @@ group.add_argument(
     help="Path to a checkpoint to resume training from (if provided)."
 )
 group.add_argument(
-    "--checkpoint-every", type=int, default=2000,
+    "--checkpoint-every", type=int, default=4000,
     help="Serialize model to a checkpoint after every these many iterations.",
 )
 group.add_argument(
@@ -118,6 +118,8 @@ def main(_A: argparse.Namespace):
     model = PretrainingModelFactory.from_config(_V) 
     CheckpointManager(model=model).load("bicaptioning_R_50_L1_H2048.pth")
     netD.textual.load_state_dict(model.textual.state_dict())
+    if _C.DISCRIMINATOR.VISUAL.PRETRAINED:
+        netD.visual.load_state_dict(model.visual.state_dict())
     netD.to(device)
     del model 
     if _C.TEXT_ENCODER.NAME == "capD":
@@ -158,6 +160,13 @@ def main(_A: argparse.Namespace):
     #optD = OptimizerFactory.from_config(_C.OPTIM.D, netD.named_parameters())
     optG = torch.optim.Adam(g_param_group, betas=(0.0, 0.9))
     optD = torch.optim.Adam(d_param_group, betas=(0.0, 0.9))
+    # d_para = []
+    # for para in netD.parameters():
+    #     if para.requires_grad:
+    #         d_para.append(para)
+    
+    # optG = torch.optim.Adam(netG.parameters(), lr=0.0001, betas=(0.0, 0.9))
+    # optD = torch.optim.Adam(d_para, lr=0.0004, betas=(0.0, 0.9))
 
     # -------------------------------------------------------------------------
     #   BEFORE TRAINING STARTS
@@ -247,10 +256,14 @@ def main(_A: argparse.Namespace):
         #   LOGGING
         # ---------------------------------------------------------------------
         if iteration % _A.log_every == 0:
-            logger.info(
-                f"{timer.stats} [errD {errD.detach():.3f} errG {errG.detach():.3f}] [GPU {dist.gpu_mem_usage()} MB]"
-            )
-            vutils.save_image(fakes.data, f'fake.png', normalize=True, scale_each=True)
+            log = f"{timer.stats} [errD {errD.detach():.3f} errG {errG.detach():.3f}] [GPU {dist.gpu_mem_usage()} MB]\n"
+            for key in d_loss_dict:
+                log += f'{key}: {d_loss_dict[key].detach():.3f} '
+            for key in g_loss_dict:
+                log += f'{key}: {g_loss_dict[key].detach():.3f} '
+            logger.info(log)
+            if _A.config == "configs/debug.yaml":
+                vutils.save_image(fakes.data, f'fake.png', normalize=True, scale_each=True)
             if dist.is_master_process():
                 tensorboard_writer.add_image("fake", vutils.make_grid(fakes.detach(), normalize=True, scale_each=True), iteration)
                 tensorboard_writer.add_image("real", vutils.make_grid(batch["image"], normalize=True, scale_each=True), iteration)

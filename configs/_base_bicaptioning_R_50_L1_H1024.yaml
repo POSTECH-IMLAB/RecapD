@@ -46,7 +46,7 @@ DISCRIMINATOR:
   VISUAL:
     NAME: "torchvision::resnet50" # "df"
     FEATURE_SIZE: 2048
-    PRETRAINED: false
+    PRETRAINED: false 
     FROZEN: false
   TEXTUAL:
     NAME: "transdec_postnorm::L1_H1024_A16_F4096"
