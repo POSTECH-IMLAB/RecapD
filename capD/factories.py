@@ -189,8 +189,8 @@ class DiscriminatorFactory(Factory):
             }
 
         if _C.DISCRIMINATOR.VISUAL.DECODER:
-            decoder = D_REC(_C.DISCRIMINATOR.LOGITOR.H)
-            kwargs["decoder"] = decoder
+            img_decoder = D_REC(_C.DISCRIMINATOR.LOGITOR.H)
+            kwargs["img_decoder"] = img_decoder
 
         return cls.create(_C.DISCRIMINATOR.NAME, visual, logitor, **kwargs)
 

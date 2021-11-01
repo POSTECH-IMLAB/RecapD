@@ -52,6 +52,7 @@ class CapD(DiscriminatorModel):
         sos_index: int = 1,
         eos_index: int = 2,
         decoder: Any = None,
+        img_decoder: Any=None,
     ):
         super().__init__(visual, logitor)
         self.textual = textual
@@ -67,6 +68,7 @@ class CapD(DiscriminatorModel):
         self.sos_index = sos_index
         self.eos_index = eos_index
         self.decoder = decoder
+        self.img_decoder = img_decoder
         self.loss = nn.CrossEntropyLoss(ignore_index=self.padding_idx)
 
     def forward(

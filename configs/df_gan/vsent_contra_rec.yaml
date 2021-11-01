@@ -19,7 +19,7 @@ DISCRIMINATOR:
   NAME: "capD"
   VISUAL:
     NAME: "df"
-    DECODER: False 
+    DECODER: True 
     FEATURE_SIZE: 32
     PRETRAINED: False
     FROZEN: False
