@@ -34,6 +34,7 @@ class Config(object):
         _C = CN()
 
         _C.RANDOM_SEED = 0
+        _C.AMP = False
         _C.CUDNN_DETERMINISTIC = False
         _C.CUDNN_BENCHMARK = True
 
@@ -93,6 +94,7 @@ class Config(object):
 
         _C.DISCRIMINATOR.LOGITOR = CN()
         _C.DISCRIMINATOR.LOGITOR.NAME = "df"
+        _C.DISCRIMINATOR.LOGITOR.H = 2048
 
         _C.DISCRIMINATOR.VISUAL.DECODER = CN()
 
@@ -129,7 +131,7 @@ class Config(object):
 
         _C.OPTIM.G.OPTIMIZER_NAME = "adam"
         _C.OPTIM.G.VISUAL_LR = 0.0001
-        _C.OPTIM.D.TEXT_LR = 0.001
+        _C.OPTIM.G.TEXT_LR = 0.0001
         _C.OPTIM.G.BETAS = [0.0, 0.9]
         _C.OPTIM.G.SGD_MOMENTUM = 0.9
         _C.OPTIM.G.WIEGHT_DECAY = 0.0001

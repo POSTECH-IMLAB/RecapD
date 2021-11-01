@@ -101,8 +101,10 @@ class LogitorBackboneFactory(Factory):
 
         _C = config
         kwargs = {
-            "visual_feature_size": _C.DISCRIMINATOR.VISUAL.FEATURE_SIZE,
+            "H": _C.DISCRIMINATOR.LOGITOR.H,
             "cond_size": _C.TEXT_ENCODER.EMBEDDING_SIZE,
+            "contra": True if ("contra" in _C.GAN_LOSS.D_LOSS_COMPONENT) or ("contra" in _C.GAN_LOSS.G_LOSS_COMPONENT)\
+                else False
         }
         return cls.create(_C.DISCRIMINATOR.LOGITOR.NAME, **kwargs)
 
@@ -133,7 +135,8 @@ class GeneratorFactory(Factory):
         kwargs = {
             "visual_feature_size": _C.GENERATOR.FEATURE_SIZE,
             "noise_size": _C.GENERATOR.NOISE_SIZE, 
-            "img_size": _C.DATA.IMAGE_CROP_SIZE 
+            "img_size": _C.DATA.IMAGE_CROP_SIZE,
+            "cond_size": _C.TEXT_ENCODER.EMBEDDING_SIZE, 
         }
 
         if "style" in _C.GENERATOR.NAME:
@@ -141,6 +144,7 @@ class GeneratorFactory(Factory):
             #kwargs["pretrained"] = _C.MODEL.VISUAL.PRETRAINED
             return cls.create(_C.GENERATOR.NAME, **kwargs)
         else:
+            
             return cls.create(_C.GENERATOR.NAME, **kwargs)
 
 class DiscriminatorFactory(Factory):
@@ -192,7 +196,7 @@ class TextEncoderFactory(Factory):
     Possible choices: ``{"damsm", "random", "capD"}``. but "capD" is from the discriminator
     """
     PRODUCTS: Dict[str, Callable] = {
-        "damsm": embedding.DAMSM,
+        "damsm": embedding.RNN_ENCODER,
         "random": embedding.WordAndPositionalEmbedding,
     }
 
@@ -287,7 +291,8 @@ class ImageTransformsFactory(Factory):
         # Color normalization: whenever selected, always applied. This accepts images
         # in [0, 255], requires mean and std in [0, 1] and normalizes to `N(0, 1)`.
         "normalize": partial(
-            alb.Normalize, mean=T.IMAGENET_COLOR_MEAN, std=T.IMAGENET_COLOR_STD, p=1.0
+            #alb.Normalize, mean=T.IMAGENET_COLOR_MEAN, std=T.IMAGENET_COLOR_STD, p=1.0
+            alb.Normalize, mean=(0.5,0.5,0.5), std=(0.5,0.5,0.5), p=1.0
         ),
     }
     # fmt: on
@@ -326,7 +331,8 @@ class PretrainingDatasetFactory(Factory):
     """
 
     PRODUCTS: Dict[str, Callable] = {
-        "capD": vdata.CaptioningDataset,
+        "cap": vdata.CaptioningDataset,
+        "damsm": vdata.DAMSMCaptioningDataset,
     }
 
     @classmethod
@@ -367,9 +373,13 @@ class PretrainingDatasetFactory(Factory):
             tokenizer=tokenizer,
             max_caption_length=_C.DATA.MAX_CAPTION_LENGTH,
         )
+        if _C.TEXT_ENCODER.NAME=="damsm":
+            name = "damsm"
+        else:
+            name = "cap"
 
         # Dataset names match with model names (and ofcourse pretext names).
-        return cls.create("capD", **kwargs)
+        return cls.create(name, **kwargs)
 
 
 class VisualBackboneFactory(Factory):
@@ -549,3 +559,43 @@ class OptimizerFactory(Factory):
 
         optimizer = cls.create(_C.OPTIMIZER_NAME, param_groups, **kwargs)
         return optimizer
+
+class PretrainingModelFactory(Factory):
+    r"""
+    Factory to create :mod:`~core.models` for different pretraining tasks.
+
+    Possible choices: ``{"bicaptioning", "captioning", "masked_lm",
+    "token_classification", "multilabel_classification"}``.
+    """
+
+    PRODUCTS: Dict[str, Callable] = {
+        # First two are basically the same. Added for shorthand notation.
+        "virtex": vmodels.VirTexModel,
+        "bicaptioning": vmodels.BidirectionalCaptioningModel,
+        "captioning": vmodels.ForwardCaptioningModel,
+    }
+
+    @classmethod
+    def from_config(cls, config: Config) -> nn.Module:
+        r"""
+        Create a model directly from config.
+
+        Args:
+            config: Config object with all the parameters.
+        """
+
+        _C = config
+
+        # Build visual and textual streams based on config.
+        visual = VisualBackboneFactory.from_config(_C)
+        textual = TextualHeadFactory.from_config(_C)
+
+        # Add model specific kwargs. Refer call signatures of specific models
+        # for matching kwargs here.
+        kwargs = {
+            "sos_index": _C.DATA.SOS_INDEX,
+            "eos_index": _C.DATA.EOS_INDEX,
+            "decoder": None,
+        }
+
+        return cls.create("virtex", visual, textual, **kwargs)

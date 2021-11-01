@@ -13,11 +13,12 @@ class GeneratorBackbone(nn.Module):
     type annotations.
     """
 
-    def __init__(self, visual_feature_size: int, noise_size: int, img_size: int):
+    def __init__(self, visual_feature_size: int, noise_size: int, img_size: int, cond_size: int):
         super().__init__()
         self.visual_feature_size = visual_feature_size
         self.noise_size = noise_size
         self.img_size = img_size
+        self.cond_size = cond_size
 
     def _define_arch(self):
         raise NotImplementedError
@@ -111,7 +112,7 @@ class DF_GEN(GeneratorBackbone):
             cond_size: int = 256,
             **kwargs
         ):
-        super().__init__(visual_feature_size, noise_size, img_size)
+        super().__init__(visual_feature_size, noise_size, img_size, cond_size)
         arch = self._define_arch()
         depth = len(arch["in_features"])
 

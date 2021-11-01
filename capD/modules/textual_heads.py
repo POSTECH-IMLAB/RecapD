@@ -268,7 +268,7 @@ class TransformerDecoderTextualHead(TextualHead):
 
         # shape: (batch_size, max_caption_length, vocab_size)
         output_logits = self.output(textual_features)
-        return output_logits
+        return output_logits, projected_visual_features.transpose(0, 1)
 
     def _generate_future_mask(
         self, size: int, dtype: torch.dtype, device: torch.device

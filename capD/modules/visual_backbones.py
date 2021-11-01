@@ -54,7 +54,7 @@ class DF_DISC(VisualBackbone):
         arch = self._define_arch()
         depth = len(arch["in_features"])
 
-        self.conv_img = nn.Conv2d(3, self.visual_feature_size, 1, 1)
+        self.conv_img = nn.Conv2d(3, self.visual_feature_size, 3, 1, 1)
         self.downblocks = nn.ModuleList([
             resD(
                 arch["in_features"][i], arch["out_features"][i]
@@ -71,17 +71,17 @@ class DF_DISC(VisualBackbone):
         assert self.img_size in (64, 128, 256)
         if self.img_size == 256:
             in_features = (1, 2, 4, 8, 16, 16)
-            out_features = (1, 2, 4, 8, 16, 16, 16)
+            out_features = (1, 2, 4, 8, 16, 16)
         elif self.img_size == 128:
             in_features = (1, 2, 4, 8, 16)
-            out_features = (1, 2, 4, 8, 16, 16)
+            out_features = (1, 2, 4, 8, 16)
         else:
             in_features = (1, 2, 4, 8)
-            out_features = (1, 2, 4, 8, 16)
+            out_features = (1, 2, 4, 8)
 
         return {
             "in_features": [3] + [self.visual_feature_size * i for i in in_features],
-            "out_features":  [self.visual_feature_size * i for i in out_features]
+            "out_features":  [self.visual_feature_size * i for i in out_features] + [2048],
         }
 
 

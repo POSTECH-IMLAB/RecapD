@@ -59,6 +59,7 @@ class CapD(DiscriminatorModel):
         self.caption_backward = caption_backward
 
         if self.caption_backward:
+            self.backward_textual = copy.deepcopy(self.textual)
             self.backward_textual.visual_projection = self.textual.visual_projection
             self.backward_textual.embedding = self.textual.embedding
             self.backward_textual.output = self.textual.output
@@ -71,10 +72,7 @@ class CapD(DiscriminatorModel):
     def forward(
         self, 
         image: torch.Tensor, 
-        caption_tokens: torch.Tensor = None, 
-        caption_lengths: torch.Tensor = None,
-        noitpac_tokens: torch.Tensor = None,
-        **kwargs,
+        batch: Dict[str, torch.Tensor] = {}, 
     ) -> Dict[str, Any]:
 
         # Compute features and captioning loss                
@@ -85,10 +83,12 @@ class CapD(DiscriminatorModel):
 
         output_dict["visual_features"] = visual_features
 
-        if "caption_tokens" is not None:
+        if "caption_tokens" in batch:
+            caption_tokens = batch["caption_tokens"]
+            caption_lengths = batch["caption_lengths"]
 
             # shape: (batch_size, max_caption_length, vocab_size)
-            output_logits, projected_visual_features, textual_features = self._captioning(
+            output_logits, projected_visual_features = self.textual(
                 visual_features, caption_tokens, caption_lengths
             )
 
@@ -96,17 +96,15 @@ class CapD(DiscriminatorModel):
                 output_logits[:, :-1].contiguous().view(-1, self.textual.vocab_size),
                 caption_tokens[:, 1:].contiguous().view(-1),
             )
-            output_dict: Dict[str, Any] = {
-                "cap_loss": loss,
-                "projected_visual_features": projected_visual_features,
-                "textual_features": textual_features,
-            }
+
+            output_dict["cap_loss"] = loss
+            output_dict["projected_visual_features"] = projected_visual_features
 
             # Do captioning in backward direction if specified.
             if self.caption_backward:
-                backward_caption_tokens = noitpac_tokens
+                backward_caption_tokens = batch["noitpac_tokens"]
 
-                backward_output_logits = self.backward_textual(
+                backward_output_logits, _ = self.backward_textual(
                     visual_features, backward_caption_tokens, caption_lengths
                 )
                 backward_loss = self.loss(
@@ -117,10 +115,7 @@ class CapD(DiscriminatorModel):
                 )
                 output_dict["cap_loss"] += backward_loss
 
-            if True or not self.training:
-                # During validation (while pretraining), get best prediction
-                # at every timestep.
-                output_dict["predictions"] = torch.argmax(output_logits, dim=-1)
+            output_dict["predictions"] = torch.argmax(output_logits, dim=-1)
         elif not self.training:
             if self.decoder is None:
                 raise ValueError("Decoder for predicting captions is missing!")
@@ -141,54 +136,6 @@ class CapD(DiscriminatorModel):
             output_dict = {"predictions": predicted_caption}
 
         return output_dict
-
-    def _captioning(
-        self, visual_features: torch.Tensor, caption_tokens: torch.Tensor, caption_lengths: torch.Tensor
-    ):
-      # Convert to NHWC and project visual features to textual feature size.
-        batch_size, channels, height, width = visual_features.size()
-        visual_features = visual_features.view(batch_size, channels, -1)
-        visual_features = visual_features.permute(0, 2, 1)
-
-        # shape: (batch_size, height * width, textual_feature_size)
-        projected_visual_features = self.textual.visual_projection(visual_features)
-        # Now visual and textual features are of same size.
-
-        batch_size, max_caption_length = caption_tokens.size()
-
-        ones = torch.ones_like(caption_tokens)
-        caption_mask = caption_lengths.unsqueeze(1) < ones.cumsum(dim=1)
-
-        # shape: (batch_size, max_caption_length, textual_feature_size)
-        caption_embeddings = self.textual.embedding(caption_tokens)
-
-        if self.textual.mask_future_positions:
-            unidirectional_mask = self.textual._generate_future_mask(
-                max_caption_length, caption_embeddings.dtype, caption_embeddings.device
-            )
-        else:
-            unidirectional_mask = None
-
-        # We transpose the first two dimensions of tokens embeddings and visual
-        # features, as required by decoder.
-        caption_embeddings = caption_embeddings.transpose(0, 1)
-        projected_visual_features = projected_visual_features.transpose(0, 1)
-
-        # shape: (max_caption_length, batch_size, hidden_size)
-        textual_features = self.textual.transformer(
-            caption_embeddings,
-            projected_visual_features,
-            tgt_mask=unidirectional_mask,
-            tgt_key_padding_mask=caption_mask,
-        )
-        # Undo the transpose and bring batch to dim 0.
-        # shape: (batch_size, max_caption_length, hidden_size)
-        textual_features = textual_features.transpose(0, 1)
-
-        # shape: (batch_size, max_caption_length, vocab_size)
-        output_logits = self.textual.output(textual_features)
-        return output_logits, projected_visual_features, textual_features
-  
 
 
     def decoding_step(

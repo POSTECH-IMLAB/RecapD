@@ -1,5 +1,6 @@
 import os 
-import sys 
+import sys
+
 
 sys.path.append(os.path.abspath(__file__).split("scripts")[0])
 
@@ -19,7 +20,7 @@ import torchvision.utils as vutils
 # fmt: off
 from capD.config import Config
 from capD.factories import (
-    PretrainingDatasetFactory, OptimizerFactory, GeneratorFactory, DiscriminatorFactory, TextEncoderFactory,
+    PretrainingDatasetFactory, OptimizerFactory, GeneratorFactory, DiscriminatorFactory, PretrainingModelFactory, TextEncoderFactory,
     
 )
 from capD.utils.checkpointing import CheckpointManager
@@ -27,7 +28,8 @@ from capD.utils.common import common_parser, common_setup, cycle
 import capD.utils.distributed as dist
 from capD.utils.timer import Timer
 from capD.modules.gan_loss import GANLoss
-
+from capD.modules.embedding import RNN_ENCODER
+from capD.models.captioning import VirTexModel 
 
 parser = common_parser(
     description="Train a capD model (CNN + Transformer) on COCO Captions."
@@ -68,21 +70,21 @@ def main(_A: argparse.Namespace):
     #   INSTANTIATE DATALOADER, MODEL, OPTIMIZER, SCHEDULER
     # -------------------------------------------------------------------------
     train_dataset = PretrainingDatasetFactory.from_config(_C, split="train")
-    val_dataset = PretrainingDatasetFactory.from_config(_C, split="val")
+    #val_dataset = PretrainingDatasetFactory.from_config(_C, split="val")
 
     # Make `DistributedSampler`s to shard datasets across GPU processes.
     # Skip this if training on CPUs.
-    train_sampler = (
-        DistributedSampler(train_dataset, shuffle=True)  # type: ignore
-        if _A.num_gpus_per_machine > 0
-        else None
-    )
-    val_sampler = (
-        DistributedSampler(val_dataset, shuffle=False)  # type: ignore
-        if _A.num_gpus_per_machine > 0
-        else None
-    )
-
+    # train_sampler = (
+    #     DistributedSampler(train_dataset, shuffle=True)  # type: ignore
+    #     if _A.num_gpus_per_machine > 0
+    #     else None
+    # )
+    # val_sampler = (
+    #     DistributedSampler(val_dataset, shuffle=False)  # type: ignore
+    #     if _A.num_gpus_per_machine > 0
+    #     else None
+    # )
+    train_sampler = None
     batch_size = _C.TRAIN.BATCH_SIZE // dist.get_world_size()
     train_dataloader = DataLoader(
         train_dataset,
@@ -94,16 +96,16 @@ def main(_A: argparse.Namespace):
         drop_last=True,
         collate_fn=train_dataset.collate_fn,
     )
-    val_dataloader = DataLoader(
-        val_dataset,
-        batch_size=batch_size,
-        sampler=val_sampler,
-        shuffle=False,
-        num_workers=_A.cpu_workers,
-        pin_memory=True,
-        drop_last=False,
-        collate_fn=val_dataset.collate_fn,
-    )
+    # val_dataloader = DataLoader(
+    #     val_dataset,
+    #     batch_size=batch_size,
+    #     sampler=val_sampler,
+    #     shuffle=False,
+    #     num_workers=_A.cpu_workers,
+    #     pin_memory=True,
+    #     drop_last=False,
+    #     collate_fn=val_dataset.collate_fn,
+    # )
 
     if _C.TEXT_ENCODER.FROZEN:
         assert not _C.OPTIM.G.UPDATE_EMB and not _C.OPTIM.D.UPDATE_EMB 
@@ -111,33 +113,51 @@ def main(_A: argparse.Namespace):
         assert _C.OPTIM.G.UPDATE_EMB or _C.OPTIM.D.UPDATE_EMB
 
     netG = GeneratorFactory.from_config(_C).to(device)
-    netD = DiscriminatorFactory.from_config(_C).to(device)
+    netD = DiscriminatorFactory.from_config(_C)
+    _V = Config("configs/bicaptioning_R_50_L1_H2048.yaml")
+    model = PretrainingModelFactory.from_config(_V) 
+    CheckpointManager(model=model).load("bicaptioning_R_50_L1_H2048.pth")
+    netD.textual.load_state_dict(model.textual.state_dict())
+    netD.to(device)
+    del model 
     if _C.TEXT_ENCODER.NAME == "capD":
         text_encoder = netD.textual.embedding
+    elif _C.TEXT_ENCODER.NAME == "damsm":
+        text_encoder = RNN_ENCODER() 
+        text_encoder.load_state_dict(torch.load("datasets/DAMSMencoders/coco/text_encoder100.pth", map_location="cpu"))
+        text_encoder.to(device)
     else:
         text_encoder = TextEncoderFactory.from_config(_C).to(device)
 
-    gan_loss = GANLoss(_C.GAN_LOSS)
-
-    g_param = []
-    for name, param in netG.named_parameters():
-        g_param.append((name, param))
-    d_param = []
-    for name, param in netD.named_parameters():
-        d_param.append((name, param))
-    
     if _C.TEXT_ENCODER.FROZEN:
         text_encoder.requires_grad_(False)
-    else:
-        if _C.OPTIM.G.UPDATE_EMB:
-            for name, param in text_encoder.named_parameters():
-                g_param.append((name, param))
-        if _C.OPTIM.D.UPDATE_EMB:
-            for name, param in text_encoder.named_parameters():
-                d_param.append((name, param))
+        text_encoder.eval()
+
+    gan_loss = GANLoss(_C.GAN_LOSS)
+
+    g_param_group = []
+    for name, param in netG.named_parameters():
+        if param.requires_grad:
+            g_param_group.append({"params":[param], "lr":_C.OPTIM.G.VISUAL_LR})
+
+    d_param_group = []
+    if not _C.OPTIM.D.UPDATE_EMB:
+        text_encoder.requires_grad_(False)
+    for name, param in netD.named_parameters():
+        if param.requires_grad:
+            lr = _C.OPTIM.D.TEXT_LR if "textual" in name else _C.OPTIM.D.VISUAL_LR
+            d_param_group.append({"params":[param], "lr":lr})
+    
+    if _C.OPTIM.G.UPDATE_EMB:
+        text_encoder.requires_grad_(True)
+        for name, param in text_encoder.named_parameters():
+            if param.requires_grad:
+                g_param_group.append({"params":[param], "lr":_C.OPTIM.G.TEXT_LR})
         
-    optG = OptimizerFactory.from_config(_C.OPTIM.G, g_param)
-    optD = OptimizerFactory.from_config(_C.OPTIM.D, d_param)
+    #optG = OptimizerFactory.from_config(_C.OPTIM.G, netG.named_parameters())
+    #optD = OptimizerFactory.from_config(_C.OPTIM.D, netD.named_parameters())
+    optG = torch.optim.Adam(g_param_group, betas=(0.0, 0.9))
+    optD = torch.optim.Adam(d_param_group, betas=(0.0, 0.9))
 
     # -------------------------------------------------------------------------
     #   BEFORE TRAINING STARTS
@@ -156,18 +176,18 @@ def main(_A: argparse.Namespace):
     train_dataloader_iter = cycle(train_dataloader, device, start_iteration)
 
     # Wrap model in DDP if using more than one processes.
-    if dist.get_world_size() > 1:
-        dist.synchronize()
-        if not _C.TEXT_ENCODER.FROZEN:
-            text_encoder = nn.parallel.DistributedDataParallel(
-                text_encoder, device_ids=[device], find_unused_parameters=True
-            )
-        netG = nn.parallel.DistributedDataParallel(
-            netG, device_ids=[device], find_unused_parameters=True
-        )
-        netD = nn.parallel.DistributedDataParallel(
-            netD, device_ids=[device], find_unused_parameters=True
-        )
+    # if dist.get_world_size() > 1:
+    #     dist.synchronize()
+    #     if not _C.TEXT_ENCODER.FROZEN:
+    #         text_encoder = nn.parallel.DistributedDataParallel(
+    #             text_encoder, device_ids=[device], find_unused_parameters=True
+    #         )
+    #     netG = nn.parallel.DistributedDataParallel(
+    #         netG, device_ids=[device], find_unused_parameters=True
+    #     )
+    #     netD = nn.parallel.DistributedDataParallel(
+    #         netD, device_ids=[device], find_unused_parameters=True
+    #     )
     # Keep track of time per iteration and ETA.
     timer = Timer(
         start_from=start_iteration + 1, total_iterations=_C.TRAIN.NUM_ITERATIONS
@@ -191,7 +211,8 @@ def main(_A: argparse.Namespace):
     # -------------------------------------------------------------------------
     for iteration in range(start_iteration + 1, _C.TRAIN.NUM_ITERATIONS + 1):
         timer.tic()
-        netG.train(), netD.train(), text_encoder.train()
+        netG.train(), netD.train(), 
+        text_encoder.train() if text_encoder is not None else None
         batch = next(train_dataloader_iter)
 
         # Train Discriminator
@@ -204,6 +225,14 @@ def main(_A: argparse.Namespace):
         errD.backward()
         optD.step()
 
+        gp_loss_dict = gan_loss.compute_gp(batch, text_encoder, netD)
+        errD_reg = gan_loss.accumulate_loss(gp_loss_dict)
+
+        optD.zero_grad(), optG.zero_grad()
+        errD_reg.backward()
+        optD.step()
+
+
         # Train Generator
         g_loss_dict, fakes = gan_loss.compute_g_loss(batch, text_encoder, netG, netD)
         errG = gan_loss.accumulate_loss(g_loss_dict) 
@@ -211,7 +240,7 @@ def main(_A: argparse.Namespace):
         optD.zero_grad(), optG.zero_grad()
         errG.backward()
         optG.step()
-
+    
         timer.toc()
 
         # ---------------------------------------------------------------------
@@ -221,6 +250,7 @@ def main(_A: argparse.Namespace):
             logger.info(
                 f"{timer.stats} [errD {errD.detach():.3f} errG {errG.detach():.3f}] [GPU {dist.gpu_mem_usage()} MB]"
             )
+            vutils.save_image(fakes.data, f'fake.png', normalize=True, scale_each=True)
             if dist.is_master_process():
                 tensorboard_writer.add_image("fake", vutils.make_grid(fakes.detach(), normalize=True, scale_each=True), iteration)
                 tensorboard_writer.add_image("real", vutils.make_grid(batch["image"], normalize=True, scale_each=True), iteration)
@@ -247,9 +277,10 @@ def main(_A: argparse.Namespace):
         if iteration % _A.checkpoint_every == 0:
             if dist.is_master_process():
                 checkpoint_manager.step(iteration)
+                vutils.save_image(fakes.data, os.path.join(_A.serialization_dir, f'{iteration}.png'), normalize=True, scale_each=True, nrow=8)
 
             # All processes will wait till master process is done serializing.
-            dist.synchronize()
+            #dist.synchronize()
 
             # torch.set_grad_enabled(False)
             # text_encoder.eval(), netG.eval()
@@ -261,7 +292,6 @@ def main(_A: argparse.Namespace):
             # sent_embeddings = sent_embeddings * (sent_embeddings.square().mean(1, keepdim=True) + 1e-8).rsqrt()
 
             # fakes = netG(batch["z"], sent_embeddings) 
-            #vutils.save_image(fakes.data, os.path.join(_A.serialization_dir, f'{iteration}.png'), normalize=True, scale_each=True, nrow=8)
             #torch.set_grad_enabled(True)
             # if dist.is_master_process():
             #     tensorboard_writer.add_scalars("val", val_loss_dict, iteration)
@@ -269,17 +299,18 @@ def main(_A: argparse.Namespace):
 
 if __name__ == "__main__":
     _A = parser.parse_args()
+    main(_A)
 
-    if _A.num_gpus_per_machine == 0:
-        main(_A)
-    else:
-        # This will launch `main` and set appropriate CUDA device (GPU ID) as
-        # per process (accessed in the beginning of `main`).
-        dist.launch(
-            main,
-            num_machines=_A.num_machines,
-            num_gpus_per_machine=_A.num_gpus_per_machine,
-            machine_rank=_A.machine_rank,
-            dist_url=_A.dist_url,
-            args=(_A, ),
-        )
+    # if _A.num_gpus_per_machine == 0:
+    #     main(_A)
+    # else:
+    #     # This will launch `main` and set appropriate CUDA device (GPU ID) as
+    #     # per process (accessed in the beginning of `main`).
+    #     dist.launch(
+    #         main,
+    #         num_machines=_A.num_machines,
+    #         num_gpus_per_machine=_A.num_gpus_per_machine,
+    #         machine_rank=_A.machine_rank,
+    #         dist_url=_A.dist_url,
+    #         args=(_A, ),
+    #     )

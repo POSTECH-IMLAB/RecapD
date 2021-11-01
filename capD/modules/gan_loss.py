@@ -4,6 +4,7 @@ import torch
 from torch import nn
 
 import torch.nn.functional as F
+from capD.modules.embedding import RNN_ENCODER
 
 def magp(img, sent, netD):
     img_inter = (img.data).requires_grad_()
@@ -33,30 +34,57 @@ class GANLoss():
         self.logit_stop_grad = cfg.LOGIT_STOP_GRAD
         self.fa_feature = cfg.FA_FEATURE
 
+    def get_sent_embs(self, batch, text_encoder):
+        if not isinstance(text_encoder, RNN_ENCODER):
+            word_embs = text_encoder(batch["caption_tokens"])
+            sent_embs = torch.sum(word_embs, dim=1)
+            sent_embs = sent_embs / batch["caption_lengths"].unsqueeze(1)
+            sent_embs = sent_embs * (sent_embs.square().mean(1, keepdim=True) + 1e-8).rsqrt()
+        else:
+            tokens, tok_lens = batch["damsm_tokens"], batch["damsm_lengths"]
+            hidden = text_encoder.init_hidden(tokens.size(0))
+            _, sent_embs = text_encoder(tokens, tok_lens, hidden)
+        return sent_embs
+
+    def contra_loss(self, emb0, emb1):
+        labels = torch.diag(torch.ones(emb0.size(0))).cuda().detach()
+        emb0 = F.normalize(emb0, p=2, dim=1) 
+        emb1 = F.normalize(emb1, p=2, dim=1)
+        scores = torch.mm(emb0, emb1.transpose(0,1))
+        s1 = F.log_softmax(scores, dim=1)
+        s1 = s1 * labels
+        s1 = - (s1.sum(1)).mean()
+        s0 = F.log_softmax(scores, dim=0)
+        s0 = s0 * labels 
+        s0 = -(s0.sum(0)).mean()
+        loss = s0 + s1
+        return loss
+        
+
+    def compute_gp(self, batch, text_encoder, netD) -> Dict[str, torch.Tensor]:
+        loss = {}
+        with torch.no_grad():
+            sent_embs = self.get_sent_embs(batch, text_encoder)
+            sent_embs = sent_embs.detach()
+           
+        errD_reg = magp(batch["image"], sent_embs, netD)
+        loss.update(errD_reg = 2 * errD_reg)
+        return loss
+
     def compute_d_loss(self, batch, text_encoder, netG, netD) -> Dict[str, torch.Tensor]:
         # real
         loss = {}
         with torch.no_grad():
-            word_embeddings = text_encoder(batch["caption_tokens"])
-            sent_embeddings = torch.sum(word_embeddings, dim=1)
-            sent_embeddings = sent_embeddings / batch["caption_lengths"].unsqueeze(1)
-            # normalize
-            sent_embeddings = sent_embeddings * (sent_embeddings.square().mean(1, keepdim=True) + 1e-8).rsqrt()
+            sent_embs = self.get_sent_embs(batch, text_encoder)
+            sent_embs = sent_embs.detach()
+            fakes = netG(batch["z"], sent_embs) 
 
-        with torch.no_grad():
-            fakes = netG(batch["z"], sent_embeddings) 
-
-        real_dict = netD(
-            image=batch["image"], 
-            caption_tokens=batch["caption_tokens"], 
-            caption_lengths=batch["caption_lengths"],
-            noitpac_tokens=batch["noitpac_tokens"]
-        )
+        real_dict = netD(batch["image"], batch)
         fake_dict = netD(fakes)
-        if 'logit' in self.d_loss_component:
-            real_output = netD.logitor(real_dict[self.logit_input], sent_embeddings)
-            mis_output = netD.logitor(real_dict[self.logit_input][:-1], sent_embeddings[1:])
-            fake_output = netD.logitor(fake_dict[self.logit_input], sent_embeddings)
+        if "logit" in self.d_loss_component:
+            real_output = netD.logitor(real_dict[self.logit_input], sent_embs)
+            mis_output = netD.logitor(real_dict[self.logit_input][:-1], sent_embs[1:])
+            fake_output = netD.logitor(fake_dict[self.logit_input], sent_embs)
             if self.type == "hinge":
                 errD_real =  F.relu(1.0 - real_output).mean()
                 errD_mis = F.relu(1.0 + mis_output).mean()
@@ -70,35 +98,34 @@ class GANLoss():
                 errD_fake = 0.5 * errD_fake,
             )
 
-        if 'magp' in self.d_loss_component:
-            errD_reg = magp(batch["image"], sent_embeddings, netD)
-            loss.update(errD_reg = 2 * errD_reg)
-        
-        if 'cap' in self.d_loss_component:
+        if "cap" in self.d_loss_component:
             errD_cap = real_dict["cap_loss"]
-            loss.update(errD_cap = errD_cap)
+            loss.update(errD_cap = 0.1 * errD_cap)
+
+        if "sent_contra" in self.d_loss_component:
+            img_feat = netD.logitor.get_contra_img_feat(real_dict[self.logit_input])
+            sent_feat = netD.logitor.get_contra_sent_feat(sent_embs)
+            errD_sent = self.contra_loss(img_feat, sent_feat)
+            loss.update(errD_sent = errD_sent)
 
         return loss
 
     def compute_g_loss(self, batch, text_encoder, netG, netD) -> Dict[str, torch.Tensor]:
         # real
         loss = {}
-        word_embeddings = text_encoder(batch["caption_tokens"])
-        sent_embeddings = torch.sum(word_embeddings, dim=1)
-        sent_embeddings = sent_embeddings / batch["caption_lengths"].unsqueeze(1)
-        # normalize
-        sent_embeddings = sent_embeddings * (sent_embeddings.square().mean(1, keepdim=True) + 1e-8).rsqrt()
+        # Todo: update emb
+        with torch.no_grad():
+            sent_embs = self.get_sent_embs(batch, text_encoder)
+            sent_embs = sent_embs.detach()
 
-        fakes = netG(batch["z"], sent_embeddings) 
+        fakes = netG(batch["z"], sent_embs) 
         fake_kwargs = {"image":fakes}
         if 'cap' in self.g_loss_component or self.fa_feature == "projected_visual_features":
-            fake_kwargs.update(
-                caption_tokens=batch["caption_tokens"], caption_lengths=batch["caption_lengths"], noitpac_tokens=batch["noitpac_tokens"]
-            )
+            fake_kwargs.update(batch=batch)
         fake_dict = netD(**fake_kwargs)
 
         if 'logit' in self.g_loss_component:
-            fake_output = netD.logitor(fake_dict[self.logit_input], sent_embeddings)
+            fake_output = netD.logitor(fake_dict[self.logit_input], sent_embs)
             if self.type == "hinge":
                 errG_fake = -fake_output.mean() 
             else:
@@ -107,18 +134,29 @@ class GANLoss():
 
         if 'cap' in self.g_loss_component:
             errG_cap = fake_dict["cap_loss"]
-            loss.update(errG_cap = errG_cap)
-            
-        if 'fa' in self.g_loss_component:
+            loss.update(errG_cap = 0.1 * errG_cap)
+        
+        fake_feat = None
+        if 'img_contra' in self.g_loss_component:
             kwargs = {"image":batch["image"]}
             if self.fa_feature == "projected_visual_features":
-                kwargs.update(
-                    caption_tokens=batch["caption_tokens"], caption_lengths=batch["caption_lengths"], noitpac_tokens=batch["noitpac_tokens"]
-                )
+                kwargs.update(batch=batch)
             with torch.no_grad():
                 real_dict = netD(**kwargs)
-            errG_fa = torch.abs(real_dict[self.fa_feature] - fake_dict[self.fa_feature]).mean()
-            loss.update(errG_fa = errG_fa)
+                real_feat = netD.logitor.get_contra_img_feat(real_dict[self.logit_input])
+                real_feat = real_feat.detach()
+            fake_feat = netD.logitor.get_contra_img_feat(fake_dict[self.logit_input])
+            errG_img = self.contra_loss(fake_feat, real_feat) 
+            loss.update(errG_img = errG_img)
+
+        if "sent_contra" in self.g_loss_component:
+            with torch.no_grad():
+                sent_feat = netD.logitor.get_contra_sent_feat(sent_embs)
+                sent_feat = sent_feat.detach()
+            if fake_feat is None:
+                fake_feat = netD.logitor.get_contra_img_feat(fake_dict[self.logit_input])
+            errG_sent = self.contra_loss(fake_feat, sent_feat)
+            loss.update(errG_sent = errG_sent)
 
         return loss, fakes
 

@@ -66,7 +66,7 @@ class CaptioningModel(nn.Module):
         self.decoder = decoder
         self.loss = nn.CrossEntropyLoss(ignore_index=self.padding_idx)
 
-    def forward(self, batch: Dict[str, torch.Tensor]) -> Dict[str, Any]:
+    def forward(self, image: torch.Tensor, batch: Dict[str, torch.Tensor]) -> Dict[str, Any]:
         r"""
         Given a batch of images and captions, compute log likelihood loss per
         caption token during training. During inference (with images), predict
@@ -91,31 +91,33 @@ class CaptioningModel(nn.Module):
         """
 
         # shape: (batch_size, channels, height, width)
-        visual_features = self.visual(batch["image"])
+        visual_features = self.visual(image)
         batch_size = visual_features.size(0)
+        output_dict: Dict[str, Any] = {}
+
+        output_dict["visual_features"] = visual_features
 
         if "caption_tokens" in batch:
             caption_tokens = batch["caption_tokens"]
             caption_lengths = batch["caption_lengths"]
 
             # shape: (batch_size, max_caption_length, vocab_size)
-            output_logits = self.textual(
+            output_logits, projected_visual_features = self.textual(
                 visual_features, caption_tokens, caption_lengths
             )
             loss = self.loss(
                 output_logits[:, :-1].contiguous().view(-1, self.textual.vocab_size),
                 caption_tokens[:, 1:].contiguous().view(-1),
             )
-            output_dict: Dict[str, Any] = {
-                "loss": loss,
-                # Single scalar per batch for logging in training script.
-                "loss_components": {"captioning_forward": loss.clone().detach()},
-            }
+            output_dict["loss"] = loss
+            output_dict["loss_components"] = {"captioning_forward": loss.clone().detach()}
+            output_dict["projected_visual_features"] = projected_visual_features
+
             # Do captioning in backward direction if specified.
             if self.caption_backward:
                 backward_caption_tokens = batch["noitpac_tokens"]
 
-                backward_output_logits = self.backward_textual(
+                backward_output_logits, _ = self.backward_textual(
                     visual_features, backward_caption_tokens, caption_lengths
                 )
                 backward_loss = self.loss(
@@ -131,11 +133,8 @@ class CaptioningModel(nn.Module):
                     captioning_backward=backward_loss.clone().detach()
                 )
 
-            if not self.training:
-                # During validation (while pretraining), get best prediction
-                # at every timestep.
-                output_dict["predictions"] = torch.argmax(output_logits, dim=-1)
-        else:
+            output_dict["predictions"] = torch.argmax(output_logits, dim=-1)
+        elif not self.training:
             if self.decoder is None:
                 raise ValueError("Decoder for predicting captions is missing!")
 
@@ -162,10 +161,13 @@ class CaptioningModel(nn.Module):
         r"""
         Given visual features and a batch of (assumed) partial captions, predict
         the logits over output vocabulary tokens for next timestep. This method
-        is used by :class:`~virtex.utils.beam_search.AutoRegressiveBeamSearch`
-        and :class:`~virtex.utils.nucleus_sampling.AutoRegressiveNucleusSampling`.
+        is used by :class:`~core.utils.beam_search.AutoRegressiveBeamSearch`
+        and :class:`~core.utils.nucleus_sampling.AutoRegressiveNucleusSampling`.
+
         .. note::
+
             For nucleus sampling, ``beam_size`` will always be 1 (not relevant).
+
         Args:
             projected_visual_features: A tensor of shape ``(batch_size, ...,
                 textual_feature_size)`` with visual features already projected to
@@ -173,6 +175,7 @@ class CaptioningModel(nn.Module):
             partial_captions: A tensor of shape ``(batch_size * beam_size, timesteps)``
                 containing tokens predicted so far -- one for each beam. We need all
                 prior predictions because our model is auto-regressive.
+
         Returns:
             A tensor of shape ``(batch_size * beam_size, vocab_size)`` -- logits
             over output vocabulary tokens for next timestep.
@@ -198,7 +201,7 @@ class CaptioningModel(nn.Module):
             partial_captions = partial_captions.unsqueeze(1)
 
         # shape: (batch_size * beam_size, partial_caption_length, vocab_size)
-        logits = self.textual(visual_features, partial_captions, caption_lengths)
+        logits, _ = self.textual(visual_features, partial_captions, caption_lengths)
         # Return logits from the last timestep.
         return logits[:, -1, :]
 
@@ -216,13 +219,14 @@ class CaptioningModel(nn.Module):
             predictions_str += f"""
                 Caption tokens : {" ".join(tokens.tolist())}
                 Predictions (f): {" ".join(preds.tolist())}
+
                 """
         return predictions_str
 
 
 class ForwardCaptioningModel(CaptioningModel):
     r"""
-    Convenient extension of :class:`~virtex.models.captioning.CaptioningModel`
+    Convenient extension of :class:`~core.models.captioning.CaptioningModel`
     for better readability: this passes ``caption_backward=False`` to super class.
     """
 
@@ -246,7 +250,7 @@ class ForwardCaptioningModel(CaptioningModel):
 
 class BidirectionalCaptioningModel(CaptioningModel):
     r"""
-    Convenient extension of :class:`~virtex.models.captioning.CaptioningModel`
+    Convenient extension of :class:`~core.models.captioning.CaptioningModel`
     for better readability: this passes ``caption_backward=True`` to super class.
     """
 
