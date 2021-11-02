@@ -36,6 +36,9 @@ class GANLoss():
         self.logit_input = cfg.LOGIT_INPUT
         self.logit_stop_grad = cfg.LOGIT_STOP_GRAD
         self.fa_feature = cfg.FA_FEATURE
+
+        self.cap_coeff = 1.
+
         if "img_rec" in self.d_loss_component:
             self.perceptual_fn = lpips.LPIPS(net="vgg").cuda()
 
@@ -79,6 +82,7 @@ class GANLoss():
     def compute_d_loss(self, batch, text_encoder, netG, netD) -> Dict[str, torch.Tensor]:
         # real
         loss = {}
+        rec = None
         with torch.no_grad():
             sent_embs = self.get_sent_embs(batch, text_encoder)
             sent_embs = sent_embs.detach()
@@ -108,7 +112,7 @@ class GANLoss():
 
         if "cap" in self.d_loss_component:
             errD_cap = real_dict["cap_loss"]
-            loss.update(errD_cap = 0.1 * errD_cap)
+            loss.update(errD_cap = self.cap_coeff * errD_cap)
 
         img_feat = None
         if "sent_contra" in self.d_loss_component:
@@ -122,7 +126,7 @@ class GANLoss():
             errD_rec = self.perceptual_fn(rec, batch["image"].detach()).mean()
             loss.update(errD_rec = errD_rec)
 
-        return loss
+        return loss, rec
 
     def compute_g_loss(self, batch, text_encoder, netG, netD) -> Dict[str, torch.Tensor]:
         # real
@@ -148,7 +152,7 @@ class GANLoss():
 
         if 'cap' in self.g_loss_component:
             errG_cap = fake_dict["cap_loss"]
-            loss.update(errG_cap = 0.1 * errG_cap)
+            loss.update(errG_cap = self.cap_coeff * errG_cap)
         
         if 'img_contra' in self.g_loss_component:
             kwargs = {"image":batch["image"]}
@@ -169,6 +173,14 @@ class GANLoss():
             fake_feat = netD.logitor.get_contra_img_feat(fake_dict[self.logit_input])
             errG_sent = self.contra_loss(fake_feat, sent_feat)
             loss.update(errG_sent = errG_sent)
+
+        if 'img_fa' in self.g_loss_component:
+            with torch.no_grad():
+                real_dict=netD(batch["image"])
+                real_feat = real_dict["visual_features"]
+            fake_feat = fake_dict["visual_features"]
+            errG_fa = torch.abs(fake_feat-real_feat.detach()).mean()
+            loss.update(errG_fa=errG_fa)
 
         return loss, fakes
 
