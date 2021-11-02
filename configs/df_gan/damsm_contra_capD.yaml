@@ -32,7 +32,7 @@ DISCRIMINATOR:
 GAN_LOSS:
   TYPE: "hinge"
   D_LOSS_COMPONENT: "logit,magp,cap" #,img_rec
-  G_LOSS_COMPONENT: "logit" #,img_contra
+  G_LOSS_COMPONENT: "logit,img_contra" #,img_contra
   LOGIT_INPUT: "visual_features"
   LOGIT_STOP_GRAD: False
   FA_FEATURE: "visual_features"
