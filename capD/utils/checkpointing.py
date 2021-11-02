@@ -147,6 +147,9 @@ class CheckpointManager(object):
         # Load each checkpointable from checkpoint.
         for key in checkpoint:
             if key in self.checkpointables:
+                if self.checkpointables[key] is None:
+                    logger.info(f'{key} is None')
+                    continue
                 logger.info(f"Rank {rank}: Loading {key} from {checkpoint_path}")
 
                 if isinstance(
