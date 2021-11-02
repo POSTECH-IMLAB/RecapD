@@ -70,6 +70,7 @@ def main(_A: argparse.Namespace):
     #   INSTANTIATE DATALOADER, MODEL, OPTIMIZER, SCHEDULER
     # -------------------------------------------------------------------------
     train_dataset = PretrainingDatasetFactory.from_config(_C, split="train")
+    logger.info(f"Dataset size: {len(train_dataset)}")
     #val_dataset = PretrainingDatasetFactory.from_config(_C, split="val")
 
     # Make `DistributedSampler`s to shard datasets across GPU processes.
@@ -115,6 +116,7 @@ def main(_A: argparse.Namespace):
     netG = GeneratorFactory.from_config(_C).to(device)
     netD = DiscriminatorFactory.from_config(_C)
     _V = Config("configs/bicaptioning_R_50_L1_H2048.yaml")
+    # For text encoder
     model = PretrainingModelFactory.from_config(_V) 
     CheckpointManager(model=model).load("bicaptioning_R_50_L1_H2048.pth")
     netD.textual.load_state_dict(model.textual.state_dict())
@@ -158,8 +160,8 @@ def main(_A: argparse.Namespace):
         
     #optG = OptimizerFactory.from_config(_C.OPTIM.G, netG.named_parameters())
     #optD = OptimizerFactory.from_config(_C.OPTIM.D, netD.named_parameters())
-    optG = torch.optim.Adam(g_param_group, betas=(0.0, 0.9))
-    optD = torch.optim.Adam(d_param_group, betas=(0.0, 0.9))
+    optG = torch.optim.Adam(g_param_group, betas=_C.OPTIM.G.BETAS)
+    optD = torch.optim.Adam(d_param_group, betas=_C.OPTIM.D.BETAS)
     # d_para = []
     # for para in netD.parameters():
     #     if para.requires_grad:
@@ -174,9 +176,9 @@ def main(_A: argparse.Namespace):
 
     # Load checkpoint to resume training if specified.
     if _A.resume_from is not None:
-        raise NotImplementedError
         start_iteration = CheckpointManager(
-            model=model, optimizer=optimizer, scheduler=scheduler, scaler=scaler,
+            netG=netG, netD=netD, optG=optG, optD=optD, 
+            text_encoder=text_encoder if not _C.TEXT_ENCODER.FROZEN else None,
         ).load(_A.resume_from)
     else:
         start_iteration = 0
@@ -221,13 +223,14 @@ def main(_A: argparse.Namespace):
     for iteration in range(start_iteration + 1, _C.TRAIN.NUM_ITERATIONS + 1):
         timer.tic()
         netG.train(), netD.train(), 
-        text_encoder.train() if text_encoder is not None else None
-        batch = next(train_dataloader_iter)
+        if _C.TEXT_ENCODER.FROZEN:
+            text_encoder.eval() 
 
+        batch = next(train_dataloader_iter)
         # Train Discriminator
         z = torch.randn(_C.TRAIN.BATCH_SIZE, _C.GENERATOR.NOISE_SIZE).to(device)
         batch["z"] = z
-        d_loss_dict = gan_loss.compute_d_loss(batch, text_encoder, netG, netD) 
+        d_loss_dict, rec = gan_loss.compute_d_loss(batch, text_encoder, netG, netD) 
         errD = gan_loss.accumulate_loss(d_loss_dict)
 
         optD.zero_grad(), optG.zero_grad()
@@ -239,8 +242,9 @@ def main(_A: argparse.Namespace):
 
         optD.zero_grad(), optG.zero_grad()
         errD_reg.backward()
+        if _C.OPTIM.D.CLIP_GRAD_NORM > 1.0:
+            torch.nn.utils.clip_grad_norm_(netD.parameters(), _C.OPTIM.D.CLIP_GRAD_NORM)
         optD.step()
-
 
         # Train Generator
         g_loss_dict, fakes = gan_loss.compute_g_loss(batch, text_encoder, netG, netD)
@@ -248,6 +252,9 @@ def main(_A: argparse.Namespace):
 
         optD.zero_grad(), optG.zero_grad()
         errG.backward()
+        # todo add text encoder
+        if _C.OPTIM.G.CLIP_GRAD_NORM > 1.0:
+            torch.nn.utils.clip_grad_norm_(netG.parameters(), _C.OPTIM.G.CLIP_GRAD_NORM)
         optG.step()
     
         timer.toc()
@@ -264,9 +271,11 @@ def main(_A: argparse.Namespace):
             logger.info(log)
             if _A.config == "configs/debug.yaml":
                 vutils.save_image(fakes.data, f'fake.png', normalize=True, scale_each=True)
+                if rec is not None:
+                    vutils.save_image(rec.data, f'rec.png', normalize=True, scale_each=True)
             if dist.is_master_process():
-                tensorboard_writer.add_image("fake", vutils.make_grid(fakes.detach(), normalize=True, scale_each=True), iteration)
-                tensorboard_writer.add_image("real", vutils.make_grid(batch["image"], normalize=True, scale_each=True), iteration)
+                #tensorboard_writer.add_image("fake", vutils.make_grid(fakes.detach(), normalize=True, scale_each=True), iteration)
+                #tensorboard_writer.add_image("real", vutils.make_grid(batch["image"], normalize=True, scale_each=True), iteration)
                 tensorboard_writer.add_scalars("D", d_loss_dict, iteration)
                 tensorboard_writer.add_scalars("G", g_loss_dict, iteration)
                 
@@ -285,13 +294,16 @@ def main(_A: argparse.Namespace):
                 # )
 
         # ---------------------------------------------------------------------
-        #   VALIDATION
+        #  Checkpointing
         # ---------------------------------------------------------------------
-        if iteration % _A.checkpoint_every == 0:
+        if iteration % _A.checkpoint_every == 0 or iteration == _C.TRAIN.NUM_ITERATIONS:
             if dist.is_master_process():
                 vutils.save_image(fakes.data, os.path.join(_A.serialization_dir, f'{iteration}.png'), normalize=True, scale_each=True, nrow=8)
+                if rec is not None:
+                    vutils.save_image(rec.data, os.path.join(_A.serialization_dir, f'rec_{iteration}.png'), normalize=True, scale_each=True)
                 if iteration % (_A.checkpoint_every*10) == 0:
                     checkpoint_manager.step(iteration)
+                    checkpoint_manager.step(-1)
 
             # All processes will wait till master process is done serializing.
             #dist.synchronize()
