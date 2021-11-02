@@ -135,7 +135,7 @@ class Config(object):
         _C.OPTIM.G.SGD_MOMENTUM = 0.9
         _C.OPTIM.G.WIEGHT_DECAY = 0.0001
         _C.OPTIM.G.NO_DECAY = ""
-        _C.OPTIM.G.CLIP_GRAD_NORM = 10.0
+        _C.OPTIM.G.CLIP_GRAD_NORM = 0.0
         _C.OPTIM.G.LOOKAHEAD = CN()
         _C.OPTIM.G.LOOKAHEAD.USE = True
         _C.OPTIM.G.LOOKAHEAD.ALPHA = 0.5
@@ -154,7 +154,7 @@ class Config(object):
         _C.OPTIM.D.SGD_MOMENTUM = 0.9
         _C.OPTIM.D.WEIGHT_DECAY = 0.0001
         _C.OPTIM.D.NO_DECAY = ".*textual.(embedding|transformer).*(norm.*|bias)"
-        _C.OPTIM.D.CLIP_GRAD_NORM = 10.0
+        _C.OPTIM.D.CLIP_GRAD_NORM = 0.0
         _C.OPTIM.D.LOOKAHEAD = CN()
         _C.OPTIM.D.LOOKAHEAD.USE = True
         _C.OPTIM.D.LOOKAHEAD.ALPHA = 0.5
