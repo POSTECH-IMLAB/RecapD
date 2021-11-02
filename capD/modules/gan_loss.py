@@ -83,6 +83,8 @@ class GANLoss():
         # real
         loss = {}
         rec = None
+        cap = None
+
         with torch.no_grad():
             sent_embs = self.get_sent_embs(batch, text_encoder)
             sent_embs = sent_embs.detach()
@@ -112,9 +114,9 @@ class GANLoss():
 
         if "cap" in self.d_loss_component:
             errD_cap = real_dict["cap_loss"]
+            cap = real_dict["predictions"]
             loss.update(errD_cap = self.cap_coeff * errD_cap)
 
-        img_feat = None
         if "sent_contra" in self.d_loss_component:
             img_feat = netD.logitor.get_contra_img_feat(real_dict[self.logit_input])
             sent_feat = netD.logitor.get_contra_sent_feat(sent_embs)
@@ -126,11 +128,14 @@ class GANLoss():
             errD_rec = self.perceptual_fn(rec, batch["image"].detach()).mean()
             loss.update(errD_rec = errD_rec)
 
-        return loss, rec
+        return loss, rec, cap
 
     def compute_g_loss(self, batch, text_encoder, netG, netD) -> Dict[str, torch.Tensor]:
         # real
         loss = {}
+        fakes = None
+        cap = None
+
         # Todo: update emb
         with torch.no_grad():
             sent_embs = self.get_sent_embs(batch, text_encoder)
@@ -152,6 +157,7 @@ class GANLoss():
 
         if 'cap' in self.g_loss_component:
             errG_cap = fake_dict["cap_loss"]
+            cap = fake_dict["predictions"]
             loss.update(errG_cap = self.cap_coeff * errG_cap)
         
         if 'img_contra' in self.g_loss_component:
@@ -182,7 +188,7 @@ class GANLoss():
             errG_fa = torch.abs(fake_feat-real_feat.detach()).mean()
             loss.update(errG_fa=errG_fa)
 
-        return loss, fakes
+        return loss, fakes, cap
 
     def accumulate_loss(self, loss_dict):
         loss = 0.

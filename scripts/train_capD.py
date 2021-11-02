@@ -230,7 +230,7 @@ def main(_A: argparse.Namespace):
         # Train Discriminator
         z = torch.randn(_C.TRAIN.BATCH_SIZE, _C.GENERATOR.NOISE_SIZE).to(device)
         batch["z"] = z
-        d_loss_dict, rec = gan_loss.compute_d_loss(batch, text_encoder, netG, netD) 
+        d_loss_dict, rec, cap_real = gan_loss.compute_d_loss(batch, text_encoder, netG, netD) 
         errD = gan_loss.accumulate_loss(d_loss_dict)
 
         optD.zero_grad(), optG.zero_grad()
@@ -247,7 +247,7 @@ def main(_A: argparse.Namespace):
         optD.step()
 
         # Train Generator
-        g_loss_dict, fakes = gan_loss.compute_g_loss(batch, text_encoder, netG, netD)
+        g_loss_dict, fakes, cap_fake = gan_loss.compute_g_loss(batch, text_encoder, netG, netD)
         errG = gan_loss.accumulate_loss(g_loss_dict) 
 
         optD.zero_grad(), optG.zero_grad()
@@ -301,9 +301,8 @@ def main(_A: argparse.Namespace):
                 vutils.save_image(fakes.data, os.path.join(_A.serialization_dir, f'{iteration}.png'), normalize=True, scale_each=True, nrow=8)
                 if rec is not None:
                     vutils.save_image(rec.data, os.path.join(_A.serialization_dir, f'rec_{iteration}.png'), normalize=True, scale_each=True)
-                if iteration % (_A.checkpoint_every*10) == 0:
-                    checkpoint_manager.step(iteration)
-                    checkpoint_manager.step(-1)
+                checkpoint_manager.step(iteration)
+                checkpoint_manager.step(-1)
 
             # All processes will wait till master process is done serializing.
             #dist.synchronize()
