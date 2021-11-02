@@ -289,8 +289,9 @@ def main(_A: argparse.Namespace):
         # ---------------------------------------------------------------------
         if iteration % _A.checkpoint_every == 0:
             if dist.is_master_process():
-                checkpoint_manager.step(iteration)
                 vutils.save_image(fakes.data, os.path.join(_A.serialization_dir, f'{iteration}.png'), normalize=True, scale_each=True, nrow=8)
+                if iteration % (_A.checkpoint_every*10) == 0:
+                    checkpoint_manager.step(iteration)
 
             # All processes will wait till master process is done serializing.
             #dist.synchronize()
