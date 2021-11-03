@@ -1,0 +1,102 @@
+AMP: false
+CUDNN_BENCHMARK: true
+CUDNN_DETERMINISTIC: false
+DATA:
+  CAPTION_PER_IMAGE: 5
+  EOS_INDEX: 2
+  IMAGE_CROP_SIZE: 128
+  IMAGE_TRANSFORM_TRAIN:
+  - random_resized_crop
+  - horizontal_flip
+  - normalize
+  IMAGE_TRANSFORM_VAL:
+  - smallest_resize
+  - center_crop
+  - normalize
+  MASK_INDEX: 3
+  MAX_CAPTION_LENGTH: 30
+  ROOT: datasets/coco
+  SOS_INDEX: 1
+  TOKENIZER_MODEL: datasets/vocab/coco17_10k.model
+  UNK_INDEX: 0
+  VOCAB_SIZE: 10000
+DISCRIMINATOR:
+  LOGITOR:
+    H: 512
+    NAME: df
+  NAME: capD
+  TEXTUAL:
+    DECODER:
+      BEAM_SIZE: 5
+      MAX_DECODING_STEPS: 30
+      NAME: beam_search
+      NUCLEUS_SIZE: 0.9
+    DROPOUT: 0.1
+    NAME: transdec_postnorm::L1_H2048_A32_F8192
+  VISUAL:
+    DECODER: false 
+    FEATURE_SIZE: 32
+    FROZEN: false
+    NAME: df
+    PRETRAINED: false
+GAN_LOSS:
+  D_LOSS_COMPONENT: logit,magp
+  FA_FEATURE: visual_features
+  G_LOSS_COMPONENT: logit
+  LOGIT_INPUT: visual_features
+  LOGIT_STOP_GRAD: false
+  TYPE: hinge
+GENERATOR:
+  FEATURE_SIZE: 32
+  NAME: df
+  NOISE_SIZE: 100
+OPTIM:
+  D:
+    BETAS:
+    - 0.0
+    - 0.9
+    CLIP_GRAD_NORM: 0.0
+    LOOKAHEAD:
+      ALPHA: 0.5
+      STEPS: 5
+      USE: true
+    LR_DECAY_NAME: cosine
+    LR_GAMMA: 0.1
+    LR_STEPS: []
+    NO_DECAY: .*textual.(embedding|transformer).*(norm.*|bias)
+    OPTIMIZER_NAME: adam
+    SGD_MOMENTUM: 0.9
+    TEXT_LR: 0.0004
+    UPDATE_EMB: false
+    VISUAL_LR: 0.0004
+    WARMUP_STEPS: 10000
+    WEIGHT_DECAY: 0.0001
+  G:
+    BETAS:
+    - 0.0
+    - 0.9
+    CLIP_GRAD_NORM: 0.0
+    LOOKAHEAD:
+      ALPHA: 0.5
+      STEPS: 5
+      USE: true
+    LR_DECAY_NAME: cosine
+    LR_GAMMA: 0.1
+    LR_STEPS: []
+    NO_DECAY: ''
+    OPTIMIZER_NAME: adam
+    SGD_MOMENTUM: 0.9
+    TEXT_LR: 0.0001
+    UPDATE_EMB: false
+    VISUAL_LR: 0.0001
+    WARMUP_STEPS: 10000
+    WIEGHT_DECAY: 0.0001
+RANDOM_SEED: 100
+TEXT_ENCODER:
+  DIR: ''
+  EMBEDDING_SIZE: 256
+  FROZEN: true
+  NAME: damsm
+TRAIN:
+  BATCH_SIZE: 24
+  NUM_ITERATIONS: 500000
