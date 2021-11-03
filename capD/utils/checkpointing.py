@@ -93,9 +93,10 @@ class CheckpointManager(object):
             )
 
         # Remove earliest checkpoint if there are more on disk.
-        self._recent_iterations.append(iteration)
-        if len(self._recent_iterations) > self.keep_recent:
-            self.remove_earliest_checkpoint()
+        if iteration != -1:
+            self._recent_iterations.append(iteration)
+            if len(self._recent_iterations) > self.keep_recent:
+                self.remove_earliest_checkpoint()
 
     def _state_dict(self):
         r"""Return a dict containing state dict of all checkpointables."""
@@ -157,7 +158,7 @@ class CheckpointManager(object):
                 ):
                     self.checkpointables[key].module.load_state_dict(checkpoint[key])
                 else:
-                    self.checkpointables[key].load_state_dict(checkpoint[key])
+                    self.checkpointables[key].load_state_dict(checkpoint[key], strict=False)
 
                 is_loaded[key] = True
             else:

@@ -48,9 +48,10 @@ class resD(nn.Module):
         return self.conv_r(x)
 
 class DF_DISC(VisualBackbone):
-    def __init__(self, visual_feature_size: int, img_size: int):
+    def __init__(self, visual_feature_size: int, img_size: int, H: int):
         super().__init__(visual_feature_size)
         self.img_size = img_size
+        self.H = H
         arch = self._define_arch()
         depth = len(arch["in_features"])
 
@@ -81,7 +82,7 @@ class DF_DISC(VisualBackbone):
 
         return {
             "in_features": [3] + [self.visual_feature_size * i for i in in_features],
-            "out_features":  [self.visual_feature_size * i for i in out_features] + [2048],
+            "out_features":  [self.visual_feature_size * i for i in out_features] + [self.H],
         }
 
 

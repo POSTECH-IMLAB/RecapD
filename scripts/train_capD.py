@@ -115,15 +115,18 @@ def main(_A: argparse.Namespace):
 
     netG = GeneratorFactory.from_config(_C).to(device)
     netD = DiscriminatorFactory.from_config(_C)
-    _V = Config("configs/bicaptioning_R_50_L1_H2048.yaml")
     # For text encoder
-    model = PretrainingModelFactory.from_config(_V) 
-    CheckpointManager(model=model).load("bicaptioning_R_50_L1_H2048.pth")
-    netD.textual.load_state_dict(model.textual.state_dict())
+    if _C.TEXT_ENCODER.NAME == "capD" or "cap" in _C.GAN_LOSS.D_LOSS_COMPONENT:
+        _V = Config("configs/bicaptioning_R_50_L1_H2048.yaml")
+        model = PretrainingModelFactory.from_config(_V) 
+        CheckpointManager(model=model).load("bicaptioning_R_50_L1_H2048.pth")
+        text_dict = model.textual.state_dict()
+        del text_dict["visual_projection.weight"]
+        del text_dict["visual_projection.bias"]
+        netD.textual.load_state_dict(text_dict, strict=False)
     if _C.DISCRIMINATOR.VISUAL.PRETRAINED:
         netD.visual.load_state_dict(model.visual.state_dict())
     netD.to(device)
-    del model 
     if _C.TEXT_ENCODER.NAME == "capD":
         text_encoder = netD.textual.embedding
     elif _C.TEXT_ENCODER.NAME == "damsm":

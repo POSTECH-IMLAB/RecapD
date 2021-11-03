@@ -425,6 +425,7 @@ class VisualBackboneFactory(Factory):
             return cls.create("torchvision", cnn_name, **kwargs)
         else:
             kwargs["img_size"] = _C.DATA.IMAGE_CROP_SIZE
+            kwargs["H"] = _C.DISCRIMINATOR.LOGITOR.H
             return cls.create(_C.DISCRIMINATOR.VISUAL.NAME, **kwargs)
 
 
