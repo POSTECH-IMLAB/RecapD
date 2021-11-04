@@ -125,6 +125,7 @@ class Config(object):
         _C.GAN_LOSS.LOGIT_INPUT = "visual_features"
         _C.GAN_LOSS.LOGIT_STOP_GRAD = False
         _C.GAN_LOSS.FA_FEATURE = "visual_features"
+        _C.GAN_LOSS.SLOW_CAPG = False
         
         _C.OPTIM = CN()
         _C.OPTIM.G = CN()
