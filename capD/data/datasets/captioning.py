@@ -57,7 +57,7 @@ class DAMSMCaptioningDataset(Dataset):
 
         caption_tokens = self.caption_transform(caption=caption)["caption"]
         return {
-            "image_id": torch.tensor(image_id, dtype=torch.long),
+            "image_id": image_id,
             "image": torch.tensor(image, dtype=torch.float),
             "caption_tokens": torch.tensor(caption_tokens, dtype=torch.long),
             "noitpac_tokens": torch.tensor(caption_tokens, dtype=torch.long).flip(0),
@@ -88,7 +88,7 @@ class DAMSMCaptioningDataset(Dataset):
             padding_value=self.padding_idx,
         )
         return {
-            "image_id": torch.stack([d["image_id"] for d in data], dim=0),
+            "image_id": [d["image_id"] for d in data],
             "image": torch.stack([d["image"] for d in data], dim=0),
             "caption_tokens": caption_tokens,
             "noitpac_tokens": noitpac_tokens,
