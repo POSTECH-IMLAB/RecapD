@@ -30,7 +30,8 @@ def cycle(dataloader, device, start_iteration: int = 0):
 
         for batch in dataloader:
             for key in batch:
-                batch[key] = batch[key].to(device)
+                if isinstance(batch[key], torch.Tensor):
+                    batch[key] = batch[key].to(device)
             yield batch
             iteration += 1
 
