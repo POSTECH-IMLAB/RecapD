@@ -74,7 +74,7 @@ class Config(object):
         #   Model architecture: visual backbone and textual head.
         # ---------------------------------------------------------------------
         _C.TEXT_ENCODER = CN()
-        _C.TEXT_ENCODER.NAME = "random" # "random", "capD"
+        _C.TEXT_ENCODER.NAME = "random" # "random", "capD", "virtex"
         _C.TEXT_ENCODER.DIR = "datasets/DAMSMencoders/text_encoder100.pth"
         _C.TEXT_ENCODER.EMBEDDING_SIZE = 256
         _C.TEXT_ENCODER.FROZEN = True 
@@ -100,6 +100,8 @@ class Config(object):
         _C.DISCRIMINATOR.TEXTUAL = CN()
         _C.DISCRIMINATOR.TEXTUAL.NAME = "transdec_postnorm::L1_H2048_A32_F8192"
         _C.DISCRIMINATOR.TEXTUAL.DROPOUT = 0.1
+        _C.DISCRIMINATOR.TEXTUAL.PRETRAINED = True
+        _C.DISCRIMINATOR.TEXTUAL.FROZEN = True
 
         _C.DISCRIMINATOR.TEXTUAL.DECODER = CN()
         _C.DISCRIMINATOR.TEXTUAL.DECODER.NAME = "beam_search"

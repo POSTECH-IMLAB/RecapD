@@ -54,15 +54,10 @@ group.add_argument(
 def main(_A: argparse.Namespace):
 
     if _A.num_gpus_per_machine == 0:
-        # Set device as CPU if num_gpus_per_machine = 0.
         device: Any = torch.device("cpu")
     else:
-        # Get the current device as set for current distributed process.
-        # Check `launch` function in `capD.utils.distributed` module.
         device = torch.cuda.current_device()
 
-    # Create a config object (this will be immutable) and perform common setup
-    # such as logging and setting up serialization directory.
     _C = Config(_A.config, _A.config_override)
     common_setup(_C, _A)
 
@@ -71,20 +66,12 @@ def main(_A: argparse.Namespace):
     # -------------------------------------------------------------------------
     train_dataset = PretrainingDatasetFactory.from_config(_C, split="train")
     logger.info(f"Dataset size: {len(train_dataset)}")
-    #val_dataset = PretrainingDatasetFactory.from_config(_C, split="val")
-
-    # Make `DistributedSampler`s to shard datasets across GPU processes.
-    # Skip this if training on CPUs.
     # train_sampler = (
     #     DistributedSampler(train_dataset, shuffle=True)  # type: ignore
     #     if _A.num_gpus_per_machine > 0
     #     else None
     # )
-    # val_sampler = (
-    #     DistributedSampler(val_dataset, shuffle=False)  # type: ignore
-    #     if _A.num_gpus_per_machine > 0
-    #     else None
-    # )
+    
     train_sampler = None
     batch_size = _C.TRAIN.BATCH_SIZE // dist.get_world_size()
     train_dataloader = DataLoader(
@@ -97,17 +84,7 @@ def main(_A: argparse.Namespace):
         drop_last=True,
         collate_fn=train_dataset.collate_fn,
     )
-    # val_dataloader = DataLoader(
-    #     val_dataset,
-    #     batch_size=batch_size,
-    #     sampler=val_sampler,
-    #     shuffle=False,
-    #     num_workers=_A.cpu_workers,
-    #     pin_memory=True,
-    #     drop_last=False,
-    #     collate_fn=val_dataset.collate_fn,
-    # )
-
+    
     if _C.TEXT_ENCODER.FROZEN:
         assert not _C.OPTIM.G.UPDATE_EMB and not _C.OPTIM.D.UPDATE_EMB 
     else:
@@ -115,20 +92,30 @@ def main(_A: argparse.Namespace):
 
     netG = GeneratorFactory.from_config(_C).to(device)
     netD = DiscriminatorFactory.from_config(_C)
-    # For text encoder
-    if _C.TEXT_ENCODER.NAME == "capD" or "cap" in _C.GAN_LOSS.D_LOSS_COMPONENT:
+    # For loading pretrained model
+    if _C.DISCRIMINATOR.TEXTUAL.PRETRAINED or _C.TEXT_ENCODER == "virtex":
         _V = Config("configs/bicaptioning_R_50_L1_H2048.yaml")
         model = PretrainingModelFactory.from_config(_V) 
         CheckpointManager(model=model).load("bicaptioning_R_50_L1_H2048.pth")
+
+    if  _C.DISCRIMINATOR.TEXTUAL.PRETRAINED:
         text_dict = model.textual.state_dict()
         del text_dict["visual_projection.weight"]
         del text_dict["visual_projection.bias"]
         netD.textual.load_state_dict(text_dict, strict=False)
     if _C.DISCRIMINATOR.VISUAL.PRETRAINED:
         netD.visual.load_state_dict(model.visual.state_dict())
+        if _C.DISCRIMINAOTR.VISUAL.FROZEN:
+            netD.visual.requires_grad_(False)
+            netD.visual.eval()
     netD.to(device)
+
+
+    # For text encoder
     if _C.TEXT_ENCODER.NAME == "capD":
         text_encoder = netD.textual.embedding
+    elif _C.TEXT_ENCODER.NAME == "virtex":
+        text_encoder = model.textual.embedding
     elif _C.TEXT_ENCODER.NAME == "damsm":
         text_encoder = RNN_ENCODER() 
         text_encoder.load_state_dict(torch.load("datasets/DAMSMencoders/coco/text_encoder100.pth", map_location="cpu"))
@@ -161,18 +148,8 @@ def main(_A: argparse.Namespace):
             if param.requires_grad:
                 g_param_group.append({"params":[param], "lr":_C.OPTIM.G.TEXT_LR})
         
-    #optG = OptimizerFactory.from_config(_C.OPTIM.G, netG.named_parameters())
-    #optD = OptimizerFactory.from_config(_C.OPTIM.D, netD.named_parameters())
     optG = torch.optim.Adam(g_param_group, betas=_C.OPTIM.G.BETAS)
     optD = torch.optim.Adam(d_param_group, betas=_C.OPTIM.D.BETAS)
-    # d_para = []
-    # for para in netD.parameters():
-    #     if para.requires_grad:
-    #         d_para.append(para)
-    
-    # optG = torch.optim.Adam(netG.parameters(), lr=0.0001, betas=(0.0, 0.9))
-    # optD = torch.optim.Adam(d_para, lr=0.0004, betas=(0.0, 0.9))
-
     # -------------------------------------------------------------------------
     #   BEFORE TRAINING STARTS
     # -------------------------------------------------------------------------
