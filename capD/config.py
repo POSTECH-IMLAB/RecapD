@@ -64,7 +64,7 @@ class Config(object):
             "normalize",
         ]
 
-        _C.DATA.IMAGE_TRANSFORM_VAL = [
+        _C.DATA.IMAGE_TRANSFORM_TEST = [
             "smallest_resize",
             "center_crop",
             "normalize",

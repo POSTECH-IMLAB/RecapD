@@ -66,7 +66,7 @@ class CaptioningModel(nn.Module):
         self.decoder = decoder
         self.loss = nn.CrossEntropyLoss(ignore_index=self.padding_idx)
 
-    def forward(self, image: torch.Tensor, batch: Dict[str, torch.Tensor]) -> Dict[str, Any]:
+    def forward(self, image: torch.Tensor, batch: Dict[str, torch.Tensor] = {}) -> Dict[str, Any]:
         r"""
         Given a batch of images and captions, compute log likelihood loss per
         caption token during training. During inference (with images), predict

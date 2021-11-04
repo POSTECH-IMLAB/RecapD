@@ -46,14 +46,16 @@ class CocoCaptionsDataset(Dataset):
     def load_text_data(self, tokens):
         captions = []
         damsm_tokens = []
+        cap = []
+        damsm = []
         for tok in tokens:
-            cap = []
-            damsm = []
-            while len(cap) < 5:
-                cap.append(' '.join([self.i2w[i] for i in tok])+'.')
-                damsm.append(tok)
-            captions.append(cap)
-            damsm_tokens.append(damsm)
+            cap.append(' '.join([self.i2w[i] for i in tok])+'.')
+            damsm.append(tok)
+            if len(cap) == 5:
+                captions.append(cap)
+                damsm_tokens.append(damsm)
+                cap = []
+                damsm = []
         return captions, damsm_tokens
 
 

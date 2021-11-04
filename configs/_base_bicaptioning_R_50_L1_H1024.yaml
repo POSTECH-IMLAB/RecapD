@@ -25,7 +25,7 @@ DATA:
     #- "color_jitter"
     - "normalize"
 
-  IMAGE_TRANSFORM_VAL:
+  IMAGE_TRANSFORM_TEST:
     - "smallest_resize"
     - "center_crop"
     - "normalize"

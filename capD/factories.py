@@ -601,7 +601,7 @@ class PretrainingModelFactory(Factory):
         kwargs = {
             "sos_index": _C.DATA.SOS_INDEX,
             "eos_index": _C.DATA.EOS_INDEX,
-            "decoder": None,
+            "decoder": CaptionDecoderFactory.from_config(_C),
         }
 
         return cls.create("virtex", visual, textual, **kwargs)

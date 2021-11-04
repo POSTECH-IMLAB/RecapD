@@ -9,7 +9,7 @@ DATA:
   - random_resized_crop
   - horizontal_flip
   - normalize
-  IMAGE_TRANSFORM_VAL:
+  IMAGE_TRANSFORM_TEST:
   - smallest_resize
   - center_crop
   - normalize
