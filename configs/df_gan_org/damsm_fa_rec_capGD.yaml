@@ -57,7 +57,7 @@ OPTIM:
     BETAS:
     - 0.0
     - 0.9
-    CLIP_GRAD_NORM: 0.0
+    CLIP_GRAD_NORM: 10.0
     OPTIMIZER_NAME: adam
     TEXT_LR: 0.0004
     UPDATE_EMB: false
@@ -66,7 +66,7 @@ OPTIM:
     BETAS:
     - 0.0
     - 0.9
-    CLIP_GRAD_NORM: 0.0
+    CLIP_GRAD_NORM: 10.0
     OPTIMIZER_NAME: adam
     TEXT_LR: 0.0001
     UPDATE_EMB: false
