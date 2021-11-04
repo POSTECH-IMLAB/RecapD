@@ -24,7 +24,7 @@ DISCRIMINATOR:
   LOGITOR:
     H: 512
     NAME: df
-  NAME: df 
+  NAME: capD 
   TEXTUAL:
     DECODER:
       BEAM_SIZE: 5
@@ -42,9 +42,9 @@ DISCRIMINATOR:
     NAME: df
     PRETRAINED: false
 GAN_LOSS:
-  D_LOSS_COMPONENT: logit,magp
+  D_LOSS_COMPONENT: logit,magp,cap
   FA_FEATURE: visual_features
-  G_LOSS_COMPONENT: logit
+  G_LOSS_COMPONENT: logit,img_fa,cap
   LOGIT_INPUT: visual_features
   LOGIT_STOP_GRAD: false
   TYPE: hinge
@@ -57,7 +57,7 @@ OPTIM:
     BETAS:
     - 0.0
     - 0.9
-    CLIP_GRAD_NORM: 0.0
+    CLIP_GRAD_NORM: 10.0
     OPTIMIZER_NAME: adam
     TEXT_LR: 0.0004
     UPDATE_EMB: false
@@ -66,7 +66,7 @@ OPTIM:
     BETAS:
     - 0.0
     - 0.9
-    CLIP_GRAD_NORM: 0.0
+    CLIP_GRAD_NORM: 10.0
     OPTIMIZER_NAME: adam
     TEXT_LR: 0.0001
     UPDATE_EMB: false

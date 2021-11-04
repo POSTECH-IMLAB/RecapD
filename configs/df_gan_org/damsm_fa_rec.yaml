@@ -24,7 +24,7 @@ DISCRIMINATOR:
   LOGITOR:
     H: 512
     NAME: df
-  NAME: capD
+  NAME: df 
   TEXTUAL:
     DECODER:
       BEAM_SIZE: 5
@@ -32,7 +32,9 @@ DISCRIMINATOR:
       NAME: beam_search
       NUCLEUS_SIZE: 0.9
     DROPOUT: 0.1
-    NAME: transdec_postnorm::L1_H2048_A32_F8192
+    FROZEN: false
+    NAME: transdec_postnorm::L1_H512_A32_F2048
+    PRETRAINED: false
   VISUAL:
     DECODER: true 
     FEATURE_SIZE: 32
@@ -40,7 +42,7 @@ DISCRIMINATOR:
     NAME: df
     PRETRAINED: false
 GAN_LOSS:
-  D_LOSS_COMPONENT: logit,magp,rec
+  D_LOSS_COMPONENT: logit,magp,img_rec
   FA_FEATURE: visual_features
   G_LOSS_COMPONENT: logit,img_fa
   LOGIT_INPUT: visual_features
@@ -56,41 +58,19 @@ OPTIM:
     - 0.0
     - 0.9
     CLIP_GRAD_NORM: 0.0
-    LOOKAHEAD:
-      ALPHA: 0.5
-      STEPS: 5
-      USE: true
-    LR_DECAY_NAME: cosine
-    LR_GAMMA: 0.1
-    LR_STEPS: []
-    NO_DECAY: .*textual.(embedding|transformer).*(norm.*|bias)
     OPTIMIZER_NAME: adam
-    SGD_MOMENTUM: 0.9
     TEXT_LR: 0.0004
     UPDATE_EMB: false
     VISUAL_LR: 0.0004
-    WARMUP_STEPS: 10000
-    WEIGHT_DECAY: 0.0001
   G:
     BETAS:
     - 0.0
     - 0.9
     CLIP_GRAD_NORM: 0.0
-    LOOKAHEAD:
-      ALPHA: 0.5
-      STEPS: 5
-      USE: true
-    LR_DECAY_NAME: cosine
-    LR_GAMMA: 0.1
-    LR_STEPS: []
-    NO_DECAY: ''
     OPTIMIZER_NAME: adam
-    SGD_MOMENTUM: 0.9
     TEXT_LR: 0.0001
     UPDATE_EMB: false
     VISUAL_LR: 0.0001
-    WARMUP_STEPS: 10000
-    WIEGHT_DECAY: 0.0001
 RANDOM_SEED: 100
 TEXT_ENCODER:
   DIR: ''
