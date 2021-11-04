@@ -215,6 +215,8 @@ def main(_A: argparse.Namespace):
 
         optD.zero_grad(), optG.zero_grad()
         errD.backward()
+        if _C.OPTIM.D.CLIP_GRAD_NORM > 1.0:
+            torch.nn.utils.clip_grad_norm_(netD.parameters(), _C.OPTIM.D.CLIP_GRAD_NORM)
         optD.step()
 
         gp_loss_dict = gan_loss.compute_gp(batch, text_encoder, netD)
