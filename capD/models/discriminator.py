@@ -15,10 +15,12 @@ class DiscriminatorModel(nn.Module):
         self,
         visual: VisualBackbone,
         logitor: LogitorBackbone,
+        img_decoder: Any,
     ):
         super().__init__()
         self.visual = visual
         self.logitor = logitor
+        self.img_decoder = img_decoder
 
     def forward(self, image: torch.Tensor, **kwargs) -> Dict[str, Any]:
         raise NotImplementedError
@@ -28,8 +30,9 @@ class DF_D(DiscriminatorModel):
         self,
         visual: VisualBackbone,
         logitor: LogitorBackbone,
+        img_decoder: Any = None,
     ):
-        super().__init__(visual, logitor)
+        super().__init__(visual, logitor, img_decoder)
 
     def forward(
         self,
@@ -54,7 +57,7 @@ class CapD(DiscriminatorModel):
         decoder: Any = None,
         img_decoder: Any=None,
     ):
-        super().__init__(visual, logitor)
+        super().__init__(visual, logitor, img_decoder)
         self.textual = textual
         self.padding_idx = self.textual.padding_idx
         self.caption_backward = caption_backward
@@ -68,7 +71,6 @@ class CapD(DiscriminatorModel):
         self.sos_index = sos_index
         self.eos_index = eos_index
         self.decoder = decoder
-        self.img_decoder = img_decoder
         self.loss = nn.CrossEntropyLoss(ignore_index=self.padding_idx)
 
     def forward(
