@@ -42,7 +42,7 @@ group.add_argument(
     help="Path to a checkpoint to resume training from (if provided)."
 )
 group.add_argument(
-    "--checkpoint-every", type=int, default=1000, #default=4000,
+    "--checkpoint-every", type=int, default=2500, #default=4000,
     help="Serialize model to a checkpoint after every these many iterations.",
 )
 group.add_argument(
