@@ -9,6 +9,11 @@ from torch import nn
 import capD.utils.distributed as dist
 
 
+def update_average(netG, netG_ema, m=0.999):
+    netG = netG.module if hasattr(netG, "module") else netG
+    for p, p_ema in zip(netG.parameters(), netG_ema.parameters()):
+        p_ema.data.mul_(m).add_((1.0-m)*p.detach().data)
+
 class CheckpointManager(object):
     r"""
     A helper class to periodically serialize models and other checkpointable
@@ -158,7 +163,7 @@ class CheckpointManager(object):
                 ):
                     self.checkpointables[key].module.load_state_dict(checkpoint[key])
                 else:
-                    self.checkpointables[key].load_state_dict(checkpoint[key], strict=False)
+                    self.checkpointables[key].load_state_dict(checkpoint[key])
 
                 is_loaded[key] = True
             else:

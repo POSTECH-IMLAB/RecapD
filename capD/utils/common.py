@@ -10,6 +10,13 @@ import torch
 from capD.config import Config
 import capD.utils.distributed as dist
 
+def count_params(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+def seed_worker(worker_id):
+    worker_seed = torch.initial_seed()%2**32
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
 
 def cycle(dataloader, device, start_iteration: int = 0):
     r"""
@@ -61,13 +68,13 @@ def common_setup(_C: Config, _A: argparse.Namespace, job_type: str = "pretrain")
     WORLD_SIZE = dist.get_world_size()
 
     # For reproducibility - refer https://pytorch.org/docs/stable/notes/randomness.html
-    random.seed(_C.RANDOM_SEED)
-    np.random.seed(_C.RANDOM_SEED)
     torch.manual_seed(_C.RANDOM_SEED)
     torch.cuda.manual_seed(_C.RANDOM_SEED)
     torch.cuda.manual_seed_all(_C.RANDOM_SEED)
     torch.backends.cudnn.deterministic = _C.CUDNN_DETERMINISTIC
     torch.backends.cudnn.benchmark = _C.CUDNN_BENCHMARK
+    random.seed(_C.RANDOM_SEED)
+    np.random.seed(_C.RANDOM_SEED)
 
     # Create serialization directory and save config in it.
     os.makedirs(_A.serialization_dir, exist_ok=True)

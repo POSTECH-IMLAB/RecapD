@@ -1,3 +1,4 @@
+from copy import deepcopy
 import os 
 import sys
 
@@ -23,8 +24,8 @@ from capD.factories import (
     PretrainingDatasetFactory, OptimizerFactory, GeneratorFactory, DiscriminatorFactory, PretrainingModelFactory, TextEncoderFactory,
     
 )
-from capD.utils.checkpointing import CheckpointManager
-from capD.utils.common import common_parser, common_setup, cycle
+from capD.utils.checkpointing import CheckpointManager, update_average
+from capD.utils.common import common_parser, common_setup, cycle, seed_worker
 import capD.utils.distributed as dist
 from capD.utils.timer import Timer
 from capD.modules.gan_loss import GANLoss
@@ -65,13 +66,17 @@ def main(_A: argparse.Namespace):
     #   INSTANTIATE DATALOADER, MODEL, OPTIMIZER, SCHEDULER
     # -------------------------------------------------------------------------
     train_dataset = PretrainingDatasetFactory.from_config(_C, split="train")
+    test_dataset = PretrainingDatasetFactory.from_config(_C, split="test")
     logger.info(f"Dataset size: {len(train_dataset)}")
     # train_sampler = (
     #     DistributedSampler(train_dataset, shuffle=True)  # type: ignore
     #     if _A.num_gpus_per_machine > 0
     #     else None
     # )
-    
+
+    g = torch.Generator()
+    g.manual_seed(_C.RANDOM_SEED) 
+
     train_sampler = None
     batch_size = _C.TRAIN.BATCH_SIZE // dist.get_world_size()
     train_dataloader = DataLoader(
@@ -80,9 +85,21 @@ def main(_A: argparse.Namespace):
         sampler=train_sampler,
         shuffle=train_sampler is None,
         num_workers=_A.cpu_workers,
+        worker_init_fn=seed_worker,
+        generator=g,
         pin_memory=True,
         drop_last=True,
         collate_fn=train_dataset.collate_fn,
+    )
+
+    test_dataloader = DataLoader(
+        test_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=_A.cpu_workers,
+        pin_memory=True,
+        drop_last=True,
+        collate_fn=test_dataset.collate_fn,
     )
     
     if _C.TEXT_ENCODER.FROZEN:
@@ -91,7 +108,9 @@ def main(_A: argparse.Namespace):
         assert _C.OPTIM.G.UPDATE_EMB or _C.OPTIM.D.UPDATE_EMB
 
     netG = GeneratorFactory.from_config(_C).to(device)
+    netG_ema = deepcopy(netG).requires_grad_(False)
     netD = DiscriminatorFactory.from_config(_C)
+
     # For loading pretrained model
     if _C.DISCRIMINATOR.TEXTUAL.PRETRAINED or _C.TEXT_ENCODER == "virtex":
         _V = Config("configs/bicaptioning_R_50_L1_H2048.yaml")
@@ -157,7 +176,7 @@ def main(_A: argparse.Namespace):
     # Load checkpoint to resume training if specified.
     if _A.resume_from is not None:
         start_iteration = CheckpointManager(
-            netG=netG, netD=netD, optG=optG, optD=optD, 
+            netG=netG, netD=netD, optG=optG, optD=optD, netG_ema=netG_ema,
             text_encoder=text_encoder if not _C.TEXT_ENCODER.FROZEN else None,
         ).load(_A.resume_from)
     else:
@@ -166,19 +185,6 @@ def main(_A: argparse.Namespace):
     # Create an iterator from dataloader to sample batches perpetually.
     train_dataloader_iter = cycle(train_dataloader, device, start_iteration)
 
-    # Wrap model in DDP if using more than one processes.
-    # if dist.get_world_size() > 1:
-    #     dist.synchronize()
-    #     if not _C.TEXT_ENCODER.FROZEN:
-    #         text_encoder = nn.parallel.DistributedDataParallel(
-    #             text_encoder, device_ids=[device], find_unused_parameters=True
-    #         )
-    #     netG = nn.parallel.DistributedDataParallel(
-    #         netG, device_ids=[device], find_unused_parameters=True
-    #     )
-    #     netD = nn.parallel.DistributedDataParallel(
-    #         netD, device_ids=[device], find_unused_parameters=True
-    #     )
     # Keep track of time per iteration and ETA.
     timer = Timer(
         start_from=start_iteration + 1, total_iterations=_C.TRAIN.NUM_ITERATIONS
@@ -194,6 +200,7 @@ def main(_A: argparse.Namespace):
             netD=netD,
             optG=optG,
             optD=optD,
+            netG_ema = netG_ema,
             text_encoder = text_encoder if not _C.TEXT_ENCODER.FROZEN else None, 
         )
 
@@ -241,6 +248,7 @@ def main(_A: argparse.Namespace):
         if _C.OPTIM.G.CLIP_GRAD_NORM > 1.0:
             torch.nn.utils.clip_grad_norm_(netG.parameters(), _C.OPTIM.G.CLIP_GRAD_NORM)
         optG.step()
+        update_average(netG, netG_ema)
     
         timer.toc()
 
@@ -256,53 +264,44 @@ def main(_A: argparse.Namespace):
             logger.info(log)
             if _A.config == "configs/debug.yaml":
                 vutils.save_image(fakes.data, f'fake.png', normalize=True, scale_each=True)
+                vutils.save_image(batch["image"].data, f"real.png", normalize=True, scale_each=True)
                 if rec is not None:
                     vutils.save_image(rec.data, f'rec.png', normalize=True, scale_each=True)
             if dist.is_master_process():
-                #tensorboard_writer.add_image("fake", vutils.make_grid(fakes.detach(), normalize=True, scale_each=True), iteration)
-                #tensorboard_writer.add_image("real", vutils.make_grid(batch["image"], normalize=True, scale_each=True), iteration)
                 tensorboard_writer.add_scalars("D", d_loss_dict, iteration)
                 tensorboard_writer.add_scalars("G", g_loss_dict, iteration)
-                
-                #raise NotImplementedError 
-                # wandb
-                # tensorboard_writer.add_scalars(
-                #     "learning_rate",
-                #     {
-                #         "visual": optimizer.param_groups[0]["lr"],
-                #         "common": optimizer.param_groups[-1]["lr"],
-                #     },
-                #     iteration,
-                # )
-                # tensorboard_writer.add_scalars(
-                #     "train", output_dict["loss_components"], iteration
-                # )
 
         # ---------------------------------------------------------------------
         #  Checkpointing
         # ---------------------------------------------------------------------
         if iteration % _A.checkpoint_every == 0 or iteration == _C.TRAIN.NUM_ITERATIONS:
             if dist.is_master_process():
-                vutils.save_image(fakes.data, os.path.join(_A.serialization_dir, f'{iteration}.png'), normalize=True, scale_each=True, nrow=8)
-                if rec is not None:
-                    vutils.save_image(rec.data, os.path.join(_A.serialization_dir, f'rec_{iteration}.png'), normalize=True, scale_each=True)
                 checkpoint_manager.step(iteration)
                 checkpoint_manager.step(-1)
 
-            # All processes will wait till master process is done serializing.
-            #dist.synchronize()
+                netG_ema.eval(), netD.eval()
+                text_iter = iter(test_dataloader)
+                test_batch = next(text_iter)
+                with torch.no_grad():
+                    for key in test_batch:
+                        if isinstance(test_batch[key], torch.Tensor):
+                            test_batch[key] = test_batch[key].to(device)
+                    tokens, tok_lens = test_batch["damsm_tokens"], test_batch["damsm_lengths"]
+                    hidden = text_encoder.init_hidden(tokens.size(0))
+                    _, sent_embs = text_encoder(tokens, tok_lens, hidden)
+                    real_dict = netD(test_batch["image"])
+                    fake_imgs = netG_ema(z, sent_embs)
+                    fake_dict = netD(fake_imgs, test_batch)
+                    org = test_dataset.tokenizer.decode(test_batch['caption_tokens'][0].tolist())
+                    real = test_dataset.tokenizer.decode(real_dict['predictions'][0].tolist())
+                    fake = test_dataset.tokenizer.decode(fake_dict['predictions'][0].tolist())
+                    logger.info(f"org: {org}")
+                    logger.info(f"real: {real}")
+                    logger.info(f"fake: {fake}")
+                    vutils.save_image(fake_imgs.data, os.path.join(_A.serialization_dir, f'{iteration}.png'), normalize=True, scale_each=True, nrow=8)
+                    vutils.save_image(test_batch["image"].data, os.path.join(_A.serialization_dir, f"real.png"), normalize=True, scale_each=True, nrow=8)                
+                    tensorboard_writer.add_text("captioning",f"{org} \n\n{real} \n\n{fake}")
 
-            # torch.set_grad_enabled(False)
-            # text_encoder.eval(), netG.eval()
-
-            # word_embeddings = text_encoder(batch["caption_tokens"])
-            # sent_embeddings = torch.sum(word_embeddings, dim=1)
-            # sent_embeddings = sent_embeddings / batch["caption_lengths"].unsqueeze(1)
-            # # normalize
-            # sent_embeddings = sent_embeddings * (sent_embeddings.square().mean(1, keepdim=True) + 1e-8).rsqrt()
-
-            # fakes = netG(batch["z"], sent_embeddings) 
-            #torch.set_grad_enabled(True)
             # if dist.is_master_process():
             #     tensorboard_writer.add_scalars("val", val_loss_dict, iteration)
 
