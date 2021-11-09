@@ -61,11 +61,13 @@ def common_setup(_C: Config, _A: argparse.Namespace, job_type: str = "pretrain")
     WORLD_SIZE = dist.get_world_size()
 
     # For reproducibility - refer https://pytorch.org/docs/stable/notes/randomness.html
-    torch.manual_seed(_C.RANDOM_SEED)
-    torch.backends.cudnn.deterministic = _C.CUDNN_DETERMINISTIC
-    torch.backends.cudnn.benchmark = _C.CUDNN_BENCHMARK
     random.seed(_C.RANDOM_SEED)
     np.random.seed(_C.RANDOM_SEED)
+    torch.manual_seed(_C.RANDOM_SEED)
+    torch.cuda.manual_seed(_C.RANDOM_SEED)
+    torch.cuda.manual_seed_all(_C.RANDOM_SEED)
+    torch.backends.cudnn.deterministic = _C.CUDNN_DETERMINISTIC
+    torch.backends.cudnn.benchmark = _C.CUDNN_BENCHMARK
 
     # Create serialization directory and save config in it.
     os.makedirs(_A.serialization_dir, exist_ok=True)
