@@ -96,9 +96,11 @@ class GANLoss():
         real_dict = netD(**kwargs)
         fake_dict = netD(fakes)
         if "logit" in self.d_loss_component:
+            real_features = real_dict[self.logit_input]
+            fake_features = fake_dict[self.logit_input]
             if self.logit_stop_grad:
-                real_features = real_dict[self.logit_input].detach()
-                fake_features = fake_dict[self.logit_input].detach()
+                real_features = real_features.detach()
+                fake_features = fake_features.detach() 
             real_output = netD.logitor(real_features, sent_embs)
             mis_output = netD.logitor(real_features[:-1], sent_embs[1:])
             fake_output = netD.logitor(fake_features, sent_embs)
