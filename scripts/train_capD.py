@@ -323,6 +323,7 @@ def main(_A: argparse.Namespace):
                         result_dict = calc_metric(**kwargs)
                         for key in result_dict["results"]:
                             logger.info(f"Eval metrics, {key}: {result_dict['results'][key]}")
+                            tensorboard_writer.add_scalar(key, result_dict["results"][key], iteration)
 
             # if dist.is_master_process():
             #     tensorboard_writer.add_scalars("val", val_loss_dict, iteration)
