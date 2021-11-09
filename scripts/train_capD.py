@@ -230,6 +230,9 @@ def main(_A: argparse.Namespace):
 
         # Train Generator
         g_loss_dict, fakes, cap_fake = gan_loss.compute_g_loss(batch, text_encoder, netG, netD)
+        if _C.GAN_LOSS.SLOW_CAPG:
+            if g_loss_dict["errG_cap"] < d_loss_dict["errD_cap"]:
+                del g_loss_dict["errG_cap"]
         errG = gan_loss.accumulate_loss(g_loss_dict) 
 
         optD.zero_grad(), optG.zero_grad()
