@@ -192,7 +192,7 @@ class CapD(DiscriminatorModel):
             partial_captions = partial_captions.unsqueeze(1)
 
         # shape: (batch_size * beam_size, partial_caption_length, vocab_size)
-        logits = self.textual(visual_features, partial_captions, caption_lengths)
+        logits, _ = self.textual(visual_features, partial_captions, caption_lengths)
         # Return logits from the last timestep.
         return logits[:, -1, :]
 
