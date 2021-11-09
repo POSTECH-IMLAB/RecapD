@@ -25,12 +25,13 @@ from capD.factories import (
     
 )
 from capD.utils.checkpointing import CheckpointManager, update_average
-from capD.utils.common import common_parser, common_setup, cycle, seed_worker
+from capD.utils.common import common_parser, common_setup, count_params, cycle, seed_worker
 import capD.utils.distributed as dist
 from capD.utils.timer import Timer
 from capD.modules.gan_loss import GANLoss
-from capD.modules.embedding import RNN_ENCODER
+from capD.modules.embedding import CNN_ENCODER, RNN_ENCODER
 from capD.models.captioning import VirTexModel 
+from capD.metrics.metric_main import calc_metric
 
 parser = common_parser(
     description="Train a capD model (CNN + Transformer) on COCO Captions."
@@ -41,13 +42,16 @@ group.add_argument(
     help="Path to a checkpoint to resume training from (if provided)."
 )
 group.add_argument(
-    "--checkpoint-every", type=int, default=4000,
+    "--checkpoint-every", type=int, default=1000, #default=4000,
     help="Serialize model to a checkpoint after every these many iterations.",
 )
 group.add_argument(
     "--log-every", type=int, default=20,
     help="""Log training curves to tensorboard after every these many iterations
     only master process logs averaged loss values across processes.""",
+)
+group.add_argument(
+    "--metrics", type=str, default="damsm_r_precision"
 )
 # fmt: on
 
@@ -61,6 +65,13 @@ def main(_A: argparse.Namespace):
 
     _C = Config(_A.config, _A.config_override)
     common_setup(_C, _A)
+    metrics = _A.metrics.split(',')
+
+    if "clip" in _A.metrics:
+        import clip 
+        model, preprocess = clip.load("ViT-B/32", device=device)
+    if "damsm" in _A.metrics:
+        model = CNN_ENCODER().to(device)
 
     # -------------------------------------------------------------------------
     #   INSTANTIATE DATALOADER, MODEL, OPTIMIZER, SCHEDULER
@@ -102,13 +113,9 @@ def main(_A: argparse.Namespace):
         collate_fn=test_dataset.collate_fn,
     )
     
-    if _C.TEXT_ENCODER.FROZEN:
-        assert not _C.OPTIM.G.UPDATE_EMB and not _C.OPTIM.D.UPDATE_EMB 
-    else:
-        assert _C.OPTIM.G.UPDATE_EMB or _C.OPTIM.D.UPDATE_EMB
-
+    
     netG = GeneratorFactory.from_config(_C).to(device)
-    netG_ema = deepcopy(netG).requires_grad_(False)
+    netG_ema = deepcopy(netG).eval().requires_grad_(False)
     netD = DiscriminatorFactory.from_config(_C)
 
     # For loading pretrained model
@@ -129,16 +136,21 @@ def main(_A: argparse.Namespace):
             netD.visual.eval()
     netD.to(device)
 
+    logger.info(f"netG param: {count_params(netG)}")
+    logger.info(f"netD param: {count_params(netD)}")
 
     # For text encoder
+    if _C.TEXT_ENCODER.FROZEN:
+        assert not _C.OPTIM.G.UPDATE_EMB and not _C.OPTIM.D.UPDATE_EMB 
+    else:
+        assert _C.OPTIM.G.UPDATE_EMB or _C.OPTIM.D.UPDATE_EMB
+
     if _C.TEXT_ENCODER.NAME == "capD":
         text_encoder = netD.textual.embedding
     elif _C.TEXT_ENCODER.NAME == "virtex":
         text_encoder = model.textual.embedding
     elif _C.TEXT_ENCODER.NAME == "damsm":
-        text_encoder = RNN_ENCODER() 
-        text_encoder.load_state_dict(torch.load("datasets/DAMSMencoders/coco/text_encoder100.pth", map_location="cpu"))
-        text_encoder.to(device)
+        text_encoder = RNN_ENCODER().to(device)
     else:
         text_encoder = TextEncoderFactory.from_config(_C).to(device)
 
@@ -291,16 +303,26 @@ def main(_A: argparse.Namespace):
                     _, sent_embs = text_encoder(tokens, tok_lens, hidden)
                     real_dict = netD(test_batch["image"])
                     fake_imgs = netG_ema(z, sent_embs)
-                    fake_dict = netD(fake_imgs, test_batch)
-                    org = test_dataset.tokenizer.decode(test_batch['caption_tokens'][0].tolist())
-                    real = test_dataset.tokenizer.decode(real_dict['predictions'][0].tolist())
-                    fake = test_dataset.tokenizer.decode(fake_dict['predictions'][0].tolist())
-                    logger.info(f"org: {org}")
-                    logger.info(f"real: {real}")
-                    logger.info(f"fake: {fake}")
+                    fake_dict = netD(fake_imgs)
                     vutils.save_image(fake_imgs.data, os.path.join(_A.serialization_dir, f'{iteration}.png'), normalize=True, scale_each=True, nrow=8)
                     vutils.save_image(test_batch["image"].data, os.path.join(_A.serialization_dir, f"real.png"), normalize=True, scale_each=True, nrow=8)                
-                    tensorboard_writer.add_text("captioning",f"{org} \n\n{real} \n\n{fake}")
+
+                    if "cap" in _C.GAN_LOSS.D_LOSS_COMPONENT:
+                        org = test_dataset.tokenizer.decode(test_batch['caption_tokens'][0].tolist())
+                        real = test_dataset.tokenizer.decode(real_dict['predictions'][0].tolist())
+                        fake = test_dataset.tokenizer.decode(fake_dict['predictions'][0].tolist())
+                        logger.info(f"org: {org}")
+                        logger.info(f"real: {real}")
+                        logger.info(f"fake: {fake}")
+                        tensorboard_writer.add_text("captioning",f"{org} \n\n{real} \n\n{fake}")
+
+                    for metric in metrics:
+                        kwargs = {"metric": metric, "G":netG_ema, "text_encoder":text_encoder, "data_loader": test_dataloader, "batch_size":batch_size, "device":device}
+                        if "clip" or "damsm" in metric:
+                            kwargs["encoder"] = model
+                        result_dict = calc_metric(**kwargs)
+                        for key in result_dict["results"]:
+                            logger.info(f"Eval metrics, {key}: {result_dict['results'][key]}")
 
             # if dist.is_master_process():
             #     tensorboard_writer.add_scalars("val", val_loss_dict, iteration)
