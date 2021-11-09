@@ -15,7 +15,7 @@ DATA:
   MAX_CAPTION_LENGTH: 30
   TOKENIZER_MODEL: datasets/vocab/coco17_10k.model
 DISCRIMINATOR:
-  NAME: capD #df 
+  NAME: df #df 
   LOGITOR:
     NAME: df
     H: 512

@@ -15,7 +15,7 @@ DATA:
   MAX_CAPTION_LENGTH: 30
   TOKENIZER_MODEL: datasets/vocab/coco17_10k.model
 DISCRIMINATOR:
-  NAME: df #capD #df 
+  NAME: capD #capD #df 
   LOGITOR:
     NAME: df
     H: 512
@@ -27,12 +27,12 @@ DISCRIMINATOR:
   VISUAL:
     NAME: df
     FEATURE_SIZE: 32 
-    DECODER: true 
+    DECODER: false 
     FROZEN: false
     PRETRAINED: false
 GAN_LOSS:
-  D_LOSS_COMPONENT: logit,magp,img_rec
-  G_LOSS_COMPONENT: logit,img_fa
+  D_LOSS_COMPONENT: logit,magp,cap
+  G_LOSS_COMPONENT: logit
   FA_FEATURE: visual_features
   LOGIT_INPUT: visual_features
   LOGIT_STOP_GRAD: false
@@ -46,7 +46,7 @@ OPTIM:
     BETAS:
     - 0.0
     - 0.9
-    CLIP_GRAD_NORM: 0.0
+    CLIP_GRAD_NORM: 10.0
     OPTIMIZER_NAME: adam
     TEXT_LR: 0.0004
     VISUAL_LR: 0.0004
