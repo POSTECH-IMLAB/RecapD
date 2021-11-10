@@ -477,7 +477,7 @@ class TextualHeadFactory(Factory):
             feedforward_size = int(architecture.group(4))
 
             # Mask the future tokens for autoregressive captioning.
-            mask_future = _C.DISCRIMINATOR.NAME in {"virtex", "captioning", "bicaptioning"}
+            mask_future = _C.DISCRIMINATOR.NAME in {"capD","virtex", "captioning", "bicaptioning"}
 
             kwargs.update(
                 hidden_size=hidden_size,
