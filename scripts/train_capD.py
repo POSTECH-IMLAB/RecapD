@@ -212,7 +212,6 @@ def main(_A: argparse.Namespace):
         wandb.run.save()
         wandb.watch((netG, netD), log_freq = _A.log_every)
 
-
         checkpoint_manager = CheckpointManager(
             _A.serialization_dir,
             netG=netG,
@@ -245,14 +244,15 @@ def main(_A: argparse.Namespace):
             torch.nn.utils.clip_grad_norm_(netD.parameters(), _C.OPTIM.D.CLIP_GRAD_NORM)
         optD.step()
 
-        gp_loss_dict = gan_loss.compute_gp(batch, text_encoder, netD)
-        errD_reg = gan_loss.accumulate_loss(gp_loss_dict)
+        if _C.GAN_LOSS.GP:
+            gp_loss_dict = gan_loss.compute_gp(batch, text_encoder, netD)
+            errD_reg = gan_loss.accumulate_loss(gp_loss_dict)
 
-        optD.zero_grad(), optG.zero_grad()
-        errD_reg.backward()
-        if _C.OPTIM.D.CLIP_GRAD_NORM > 1.0:
-            torch.nn.utils.clip_grad_norm_(netD.parameters(), _C.OPTIM.D.CLIP_GRAD_NORM)
-        optD.step()
+            optD.zero_grad(), optG.zero_grad()
+            errD_reg.backward()
+            if _C.OPTIM.D.CLIP_GRAD_NORM > 1.0:
+                torch.nn.utils.clip_grad_norm_(netD.parameters(), _C.OPTIM.D.CLIP_GRAD_NORM)
+            optD.step()
 
         # Train Generator
         g_loss_dict, fakes, cap_fake = gan_loss.compute_g_loss(batch, text_encoder, netG, netD)
@@ -286,6 +286,10 @@ def main(_A: argparse.Namespace):
                 vutils.save_image(batch["image"].data, f"real.png", normalize=True, scale_each=True)
                 if rec is not None:
                     vutils.save_image(rec.data, f'rec.png', normalize=True, scale_each=True)
+                if "cap" in _C.GAN_LOSS.D_LOSS_COMPONENT:
+                    logger.info(batch["caption"][0])
+                    logger.info(train_dataset.tokenizer.decode(cap_real[0].tolist()))
+                    logger.info(train_dataset.tokenizer.decode(cap_fake[0].tolist())) if cap_fake is not None else None
             if dist.is_master_process():
                 wandb.log(d_loss_dict, step=iteration)
                 wandb.log(g_loss_dict, step=iteration)
@@ -323,7 +327,11 @@ def main(_A: argparse.Namespace):
                         logger.info(f"org: {org}")
                         logger.info(f"real: {real}")
                         logger.info(f"fake: {fake}")
-                        wandb.log({"cap": f"org: {org}\nreal: {real}\nfake: {fake}"}, step=iteration)
+
+                        text_table = wandb.Table(columns=["Org", "Real", "Fake"])
+                        text_table.add_data(org, real, fake)
+                        wandb.log({"cap": text_table}, step=iteration)
+
                         #tensorboard_writer.add_text("captioning",f"{org} \n\n{real} \n\n{fake}")
 
                     for metric in metrics:
