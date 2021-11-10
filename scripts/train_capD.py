@@ -15,13 +15,14 @@ import torch
 from torch import nn
 from torch.cuda import amp
 from torch.utils.data import DataLoader, DistributedSampler
-from torch.utils.tensorboard import SummaryWriter
+#from torch.utils.tensorboard import SummaryWriter
+import wandb
 import torchvision.utils as vutils
 
 # fmt: off
 from capD.config import Config
 from capD.factories import (
-    PretrainingDatasetFactory, OptimizerFactory, GeneratorFactory, DiscriminatorFactory, PretrainingModelFactory, TextEncoderFactory,
+    PretrainingDatasetFactory, GeneratorFactory, DiscriminatorFactory, PretrainingModelFactory, TextEncoderFactory,
     
 )
 from capD.utils.checkpointing import CheckpointManager, update_average
@@ -42,7 +43,7 @@ group.add_argument(
     help="Path to a checkpoint to resume training from (if provided)."
 )
 group.add_argument(
-    "--checkpoint-every", type=int, default=2500, #default=4000,
+    "--checkpoint-every", type=int, default=1000, #default=4000,
     help="Serialize model to a checkpoint after every these many iterations.",
 )
 group.add_argument(
@@ -136,8 +137,6 @@ def main(_A: argparse.Namespace):
             netD.visual.eval()
     netD.to(device)
 
-    logger.info(f"netG param: {count_params(netG)}")
-    logger.info(f"netD param: {count_params(netD)}")
 
     # For text encoder
     if _C.TEXT_ENCODER.FROZEN:
@@ -203,8 +202,16 @@ def main(_A: argparse.Namespace):
     )
     # Create tensorboard writer and checkpoint manager (only in master process).
     if dist.is_master_process():
-        tensorboard_writer = SummaryWriter(log_dir=_A.serialization_dir)
-        tensorboard_writer.add_text("config", f"```\n{_C}\n```")
+        logger.info(f"netG param: {count_params(netG)}")
+        logger.info(f"netD param: {count_params(netD)}")
+        #tensorboard_writer = SummaryWriter(log_dir=_A.serialization_dir)
+        #tensorboard_writer.add_text("config", f"```\n{_C}\n```")
+        wandb.init(project="capD")
+        wandb.config.update(_C)
+        wandb.run.name = _A.config.split("configs/")[-1].split(".yaml")[0]
+        wandb.run.save()
+        wandb.watch((netG, netD), log_freq = _A.log_every)
+
 
         checkpoint_manager = CheckpointManager(
             _A.serialization_dir,
@@ -280,8 +287,10 @@ def main(_A: argparse.Namespace):
                 if rec is not None:
                     vutils.save_image(rec.data, f'rec.png', normalize=True, scale_each=True)
             if dist.is_master_process():
-                tensorboard_writer.add_scalars("D", d_loss_dict, iteration)
-                tensorboard_writer.add_scalars("G", g_loss_dict, iteration)
+                wandb.log(d_loss_dict, step=iteration)
+                wandb.log(g_loss_dict, step=iteration)
+                # tensorboard_writer.add_scalars("D", d_loss_dict, iteration)
+                # tensorboard_writer.add_scalars("G", g_loss_dict, iteration)
 
         # ---------------------------------------------------------------------
         #  Checkpointing
@@ -314,7 +323,8 @@ def main(_A: argparse.Namespace):
                         logger.info(f"org: {org}")
                         logger.info(f"real: {real}")
                         logger.info(f"fake: {fake}")
-                        tensorboard_writer.add_text("captioning",f"{org} \n\n{real} \n\n{fake}")
+                        wandb.log({"cap": f"org: {org}\nreal: {real}\nfake: {fake}"}, step=iteration)
+                        #tensorboard_writer.add_text("captioning",f"{org} \n\n{real} \n\n{fake}")
 
                     for metric in metrics:
                         kwargs = {"metric": metric, "G":netG_ema, "text_encoder":text_encoder, "data_loader": test_dataloader, "batch_size":batch_size, "device":device}
@@ -323,7 +333,8 @@ def main(_A: argparse.Namespace):
                         result_dict = calc_metric(**kwargs)
                         for key in result_dict["results"]:
                             logger.info(f"Eval metrics, {key}: {result_dict['results'][key]}")
-                            tensorboard_writer.add_scalar(key, result_dict["results"][key], iteration)
+                            wandb.log({key: result_dict["results"][key]}, step=iteration)
+                            #tensorboard_writer.add_scalar(key, result_dict["results"][key], iteration)
 
             # if dist.is_master_process():
             #     tensorboard_writer.add_scalars("val", val_loss_dict, iteration)
