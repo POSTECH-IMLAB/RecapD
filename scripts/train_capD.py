@@ -54,6 +54,9 @@ group.add_argument(
 group.add_argument(
     "--metrics", type=str, default="damsm_r_precision"
 )
+group.add_argument(
+    "--prefix", type=str, default="local" 
+)
 # fmt: on
 
 
@@ -206,7 +209,7 @@ def main(_A: argparse.Namespace):
         logger.info(f"netD param: {count_params(netD)}")
         #tensorboard_writer = SummaryWriter(log_dir=_A.serialization_dir)
         #tensorboard_writer.add_text("config", f"```\n{_C}\n```")
-        wandb.init(project="capD")
+        wandb.init(project=f"{_A.prefix}_capD")
         wandb.config.update(_C)
         wandb.run.name = _A.config.split("configs/")[-1].split(".yaml")[0]
         wandb.run.save()
