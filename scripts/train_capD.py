@@ -317,9 +317,9 @@ def main(_A: argparse.Namespace):
                     tokens, tok_lens = test_batch["damsm_tokens"], test_batch["damsm_lengths"]
                     hidden = text_encoder.init_hidden(tokens.size(0))
                     _, sent_embs = text_encoder(tokens, tok_lens, hidden)
-                    real_dict = netD(test_batch["image"], test_batch)
+                    real_dict = netD(test_batch["image"], batch=test_batch)
                     fake_imgs = netG_ema(z, sent_embs)
-                    fake_dict = netD(fake_imgs, test_batch)
+                    fake_dict = netD(fake_imgs, batch=test_batch)
                     vutils.save_image(fake_imgs.data, os.path.join(_A.serialization_dir, f'{iteration}.png'), normalize=True, scale_each=True, nrow=8)
                     vutils.save_image(test_batch["image"].data, os.path.join(_A.serialization_dir, f"real.png"), normalize=True, scale_each=True, nrow=8)                
 
