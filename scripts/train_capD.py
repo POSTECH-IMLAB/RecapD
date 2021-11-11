@@ -291,8 +291,8 @@ def main(_A: argparse.Namespace):
                     vutils.save_image(rec.data, f'rec.png', normalize=True, scale_each=True)
                 if "cap" in _C.GAN_LOSS.D_LOSS_COMPONENT:
                     logger.info(batch["caption"][0])
-                    logger.info(train_dataset.tokenizer.decode(cap_real[0].tolist()))
-                    logger.info(train_dataset.tokenizer.decode(cap_fake[0].tolist())) if cap_fake is not None else None
+                    logger.info(train_dataset.tokenizer.decode(cap_real[0].detach().tolist()))
+                    logger.info(train_dataset.tokenizer.decode(cap_fake[0].detach().tolist())) if cap_fake is not None else None
             if dist.is_master_process():
                 wandb.log(d_loss_dict, step=iteration)
                 wandb.log(g_loss_dict, step=iteration)
@@ -317,23 +317,24 @@ def main(_A: argparse.Namespace):
                     tokens, tok_lens = test_batch["damsm_tokens"], test_batch["damsm_lengths"]
                     hidden = text_encoder.init_hidden(tokens.size(0))
                     _, sent_embs = text_encoder(tokens, tok_lens, hidden)
-                    real_dict = netD(test_batch["image"])
+                    real_dict = netD(test_batch["image"], test_batch)
                     fake_imgs = netG_ema(z, sent_embs)
-                    fake_dict = netD(fake_imgs)
+                    fake_dict = netD(fake_imgs, test_batch)
                     vutils.save_image(fake_imgs.data, os.path.join(_A.serialization_dir, f'{iteration}.png'), normalize=True, scale_each=True, nrow=8)
                     vutils.save_image(test_batch["image"].data, os.path.join(_A.serialization_dir, f"real.png"), normalize=True, scale_each=True, nrow=8)                
 
                     if "cap" in _C.GAN_LOSS.D_LOSS_COMPONENT:
-                        org = test_dataset.tokenizer.decode(test_batch['caption_tokens'][0].tolist())
-                        real = test_dataset.tokenizer.decode(real_dict['predictions'][0].tolist())
-                        fake = test_dataset.tokenizer.decode(fake_dict['predictions'][0].tolist())
+                        org = test_dataset.tokenizer.decode(test_batch['caption_tokens'][0].detach().tolist())
+                        real = test_dataset.tokenizer.decode(real_dict['predictions'][0].detach().tolist())
+                        fake = test_dataset.tokenizer.decode(fake_dict['predictions'][0].detach().tolist())
                         logger.info(f"org: {org}")
                         logger.info(f"real: {real}")
                         logger.info(f"fake: {fake}")
+                        logger.info(f"cap_fake: {fake_dict['cap_loss'].detach():.3f}, cap_real: {real_dict['cap_loss'].detach():.3f}")
 
                         text_table = wandb.Table(columns=["Org", "Real", "Fake"])
                         text_table.add_data(org, real, fake)
-                        wandb.log({"cap": text_table}, step=iteration)
+                        wandb.log({"cap": text_table, "cap_fake": fake_dict["cap_loss"], "cap_real": real_dict["cap_loss"]}, step=iteration)
 
                         #tensorboard_writer.add_text("captioning",f"{org} \n\n{real} \n\n{fake}")
 
@@ -343,7 +344,7 @@ def main(_A: argparse.Namespace):
                             kwargs["encoder"] = model
                         result_dict = calc_metric(**kwargs)
                         for key in result_dict["results"]:
-                            logger.info(f"Eval metrics, {key}: {result_dict['results'][key]}")
+                            logger.info(f"Eval metrics, {key}: {result_dict['results'][key].detach()}")
                             wandb.log({key: result_dict["results"][key]}, step=iteration)
                             #tensorboard_writer.add_scalar(key, result_dict["results"][key], iteration)
 
