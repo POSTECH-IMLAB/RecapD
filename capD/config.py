@@ -74,7 +74,7 @@ class Config(object):
         #   Model architecture: visual backbone and textual head.
         # ---------------------------------------------------------------------
         _C.TEXT_ENCODER = CN()
-        _C.TEXT_ENCODER.NAME = "random" # "random", "capD", "virtex"
+        _C.TEXT_ENCODER.NAME = "damsm" # "damsm" "random", "capD", "virtex"
         _C.TEXT_ENCODER.DIR = "datasets/DAMSMencoders/text_encoder100.pth"
         _C.TEXT_ENCODER.EMBEDDING_SIZE = 256
         _C.TEXT_ENCODER.FROZEN = True 
@@ -85,23 +85,23 @@ class Config(object):
         _C.GENERATOR.FEATURE_SIZE = 32
         
         _C.DISCRIMINATOR = CN()
-        _C.DISCRIMINATOR.NAME = "capD"
+        _C.DISCRIMINATOR.NAME = "df"
         _C.DISCRIMINATOR.VISUAL = CN()
-        _C.DISCRIMINATOR.VISUAL.NAME = "torchvision::resnet50" # "df"
-        _C.DISCRIMINATOR.VISUAL.FEATURE_SIZE = 2048
-        _C.DISCRIMINATOR.VISUAL.PRETRAINED = True
+        _C.DISCRIMINATOR.VISUAL.NAME = "df" #"torchvision::resnet50" # "df"
+        _C.DISCRIMINATOR.VISUAL.FEATURE_SIZE = 512 #2048
+        _C.DISCRIMINATOR.VISUAL.PRETRAINED = False 
         _C.DISCRIMINATOR.VISUAL.FROZEN = False
         _C.DISCRIMINATOR.VISUAL.DECODER = False 
 
         _C.DISCRIMINATOR.LOGITOR = CN()
         _C.DISCRIMINATOR.LOGITOR.NAME = "df"
-        _C.DISCRIMINATOR.LOGITOR.H = 2048
+        _C.DISCRIMINATOR.LOGITOR.H = 512 #2048
 
         _C.DISCRIMINATOR.TEXTUAL = CN()
-        _C.DISCRIMINATOR.TEXTUAL.NAME = "transdec_postnorm::L1_H2048_A32_F8192"
+        _C.DISCRIMINATOR.TEXTUAL.NAME = "transdec_postnorm::L1_H512_A8_F2048"
         _C.DISCRIMINATOR.TEXTUAL.DROPOUT = 0.1
-        _C.DISCRIMINATOR.TEXTUAL.PRETRAINED = True
-        _C.DISCRIMINATOR.TEXTUAL.FROZEN = True
+        _C.DISCRIMINATOR.TEXTUAL.PRETRAINED = False 
+        _C.DISCRIMINATOR.TEXTUAL.FROZEN = False 
 
         _C.DISCRIMINATOR.TEXTUAL.DECODER = CN()
         _C.DISCRIMINATOR.TEXTUAL.DECODER.NAME = "beam_search"
@@ -115,18 +115,18 @@ class Config(object):
         # ---------------------------------------------------------------------
 
         _C.TRAIN = CN()
-        _C.TRAIN.BATCH_SIZE = 24
-        _C.TRAIN.NUM_ITERATIONS = 500000
+        _C.TRAIN.BATCH_SIZE = 32 
+        _C.TRAIN.NUM_ITERATIONS = 300000
 
         _C.GAN_LOSS = CN()
         _C.GAN_LOSS.TYPE = "hinge"
-        _C.GAN_LOSS.D_LOSS_COMPONENT = "logit,magp,cap"
-        _C.GAN_LOSS.G_LOSS_COMPONENT = "logit,cap,fa"
-        _C.GAN_LOSS.LOGIT_INPUT = "visual_features"
-        _C.GAN_LOSS.LOGIT_STOP_GRAD = False
-        _C.GAN_LOSS.FA_FEATURE = "visual_features"
-        _C.GAN_LOSS.SLOW_CAPG = False
+        _C.GAN_LOSS.D_LOSS_COMPONENT = "logit,magp"
+        _C.GAN_LOSS.G_LOSS_COMPONENT = "logit"
         _C.GAN_LOSS.GP = True 
+        _C.GAN_LOSS.LOGIT_INPUT = "visual_features"
+        _C.GAN_LOSS.FA_FEATURE = "visual_features"
+        _C.GAN_LOSS.LOGIT_STOP_GRAD = False
+        _C.GAN_LOSS.SLOW_CAPG = False
         
         _C.OPTIM = CN()
         _C.OPTIM.G = CN()
@@ -141,7 +141,7 @@ class Config(object):
         _C.OPTIM.G.NO_DECAY = ""
         _C.OPTIM.G.CLIP_GRAD_NORM = 0.0
         _C.OPTIM.G.LOOKAHEAD = CN()
-        _C.OPTIM.G.LOOKAHEAD.USE = True
+        _C.OPTIM.G.LOOKAHEAD.USE = False 
         _C.OPTIM.G.LOOKAHEAD.ALPHA = 0.5
         _C.OPTIM.G.LOOKAHEAD.STEPS = 5
         _C.OPTIM.G.WARMUP_STEPS = 10000
@@ -152,15 +152,15 @@ class Config(object):
 
 
         _C.OPTIM.D.OPTIMIZER_NAME = "adam" #"sgd"
-        _C.OPTIM.D.VISUAL_LR = 0.2
-        _C.OPTIM.D.TEXT_LR = 0.001
+        _C.OPTIM.D.VISUAL_LR = 0.0004
+        _C.OPTIM.D.TEXT_LR = 0.0004
         _C.OPTIM.D.BETAS = [0.0, 0.9]
         _C.OPTIM.D.SGD_MOMENTUM = 0.9
         _C.OPTIM.D.WEIGHT_DECAY = 0.0001
         _C.OPTIM.D.NO_DECAY = ".*textual.(embedding|transformer).*(norm.*|bias)"
         _C.OPTIM.D.CLIP_GRAD_NORM = 0.0
         _C.OPTIM.D.LOOKAHEAD = CN()
-        _C.OPTIM.D.LOOKAHEAD.USE = True
+        _C.OPTIM.D.LOOKAHEAD.USE = False 
         _C.OPTIM.D.LOOKAHEAD.ALPHA = 0.5
         _C.OPTIM.D.LOOKAHEAD.STEPS = 5
         _C.OPTIM.D.WARMUP_STEPS = 10000
