@@ -17,6 +17,16 @@ from . import metric_utils
 
 #----------------------------------------------------------------------------
 
+def compute_damsm_fid(opts, max_real, num_gen):
+    mu_real, sigma_real = metric_utils.compute_damsm_feature_stats_for_dataset(opts=opts, max_items=max_real).get_mean_cov()
+    mu_gen, sigma_gen = metric_utils.compute_damsm_feature_stats_for_generator(opts=opts, max_items=num_gen).get_mean_cov()
+    if opts.rank != 0:
+        return float('nan')
+
+    m = np.square(mu_gen - mu_real).sum()
+    s, _ = scipy.linalg.sqrtm(np.dot(sigma_gen, sigma_real), disp=False)
+    fid = np.real(m + np.trace(sigma_gen + sigma_real - s * 2))
+
 def compute_clip_fid(opts, max_real, num_gen):
     # Direct TorchScript translation of http://download.tensorflow.org/models/image/imagenet/inception-2015-12-05.tgz
 

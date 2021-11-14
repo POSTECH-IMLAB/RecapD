@@ -150,6 +150,50 @@ class FeatureStats:
         return obj
 
 #----------------------------------------------------------------------------
+def compute_damsm_feature_stats_for_dataset(opts, max_items=None, **stats_kwargs):
+
+    # Try to lookup from cache.
+    cache_file = None
+    if opts.cache:
+        # Choose cache file name.
+        args = dict(stats_kwargs=stats_kwargs)
+        md5 = hashlib.md5(repr(sorted(args.items())).encode('utf-8'))
+        cache_tag = f'clip-{md5.hexdigest()}'
+        cache_file = dnnlib.make_cache_dir_path('gan-metrics', cache_tag + '.pkl')
+
+        # Check if the file exists (all processes must agree).
+        flag = os.path.isfile(cache_file) if opts.rank == 0 else False
+        if opts.num_gpus > 1:
+            flag = torch.as_tensor(flag, dtype=torch.float32, device=opts.device)
+            torch.distributed.broadcast(tensor=flag, src=0)
+            flag = (float(flag.cpu()) != 0)
+
+        # Load.
+        if flag:
+            return FeatureStats.load(cache_file)
+
+    # Initialize.
+    num_items = len(opts.data_loader) * opts.batch_size
+    if max_items is not None:
+        num_items = min(num_items, max_items)
+    stats = FeatureStats(max_items=num_items, **stats_kwargs)
+    encoder = opts.encoder
+
+    # Main loop.
+    for images, _labels in opts.data_loader:
+        if images.shape[1] == 1:
+            images = images.repeat([1, 3, 1, 1])
+        features = encoder(images.to(opts.device))
+        stats.append_torch(features, num_gpus=opts.num_gpus, rank=opts.rank)
+
+    # Save to cache.
+    if cache_file is not None and opts.rank == 0:
+        os.makedirs(os.path.dirname(cache_file), exist_ok=True)
+        temp_file = cache_file + '.' + uuid.uuid4().hex
+        stats.save(temp_file)
+        os.replace(temp_file, cache_file) # atomic
+    return stats
+
 
 def compute_clip_feature_stats_for_dataset(opts, max_items=None, **stats_kwargs):
 
@@ -196,6 +240,36 @@ def compute_clip_feature_stats_for_dataset(opts, max_items=None, **stats_kwargs)
     return stats
 
 #----------------------------------------------------------------------------
+def compute_damsm_feature_stats_for_generator(opts,  **stats_kwargs):
+    # Initialize.
+    stats = FeatureStats(**stats_kwargs)
+    assert stats.max_items is not None
+    encoder = opts.encoder
+    data_iter = iter(opts.data_loader)
+
+    # Main loop.
+    while not stats.is_full():
+        images = []
+        batch = next(data_iter)
+        batch_size = batch["image"].size(0)
+        for _i in range(batch_size):
+            for key in batch:
+                if isinstance(batch[key], torch.Tensor):
+                    batch[key] = batch[key].to(opts.device)
+            tokens, tok_lens = batch["damsm_tokens"], batch["damsm_lengths"]
+            hidden = opts.text_encoder.init_hidden(tokens.size(0))
+            _, sent_embs = opts.text_encoder(tokens, tok_lens, hidden)
+            z = torch.randn([batch_size, opts.G.z_dim], device=opts.device)
+            img = opts.G(z, sent_embs)
+            img = (img * 127.5 + 128).clamp(0, 255).to(torch.uint8)
+            images.append(img)
+        images = torch.cat(images)
+        if images.shape[1] == 1:
+            images = images.repeat([1, 3, 1, 1])
+        features = encoder(images)
+        stats.append_torch(features, num_gpus=opts.num_gpus, rank=opts.rank)
+    return stats
+
 
 def compute_clip_feature_stats_for_generator(opts,  **stats_kwargs):
     # Initialize.
