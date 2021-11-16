@@ -37,7 +37,7 @@ class GANLoss():
         self.logit_stop_grad = cfg.LOGIT_STOP_GRAD
         self.fa_feature = cfg.FA_FEATURE
 
-        self.cap_coeff = 1.
+        self.cap_coeff = cfg.CAP_COEFF 
 
         if "img_rec" in self.d_loss_component:
             self.perceptual_fn = lpips.LPIPS(net="vgg").cuda()

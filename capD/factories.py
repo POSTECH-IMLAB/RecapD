@@ -186,6 +186,7 @@ class DiscriminatorFactory(Factory):
                 "sos_index": _C.DATA.SOS_INDEX,
                 "eos_index": _C.DATA.EOS_INDEX,
                 "decoder": CaptionDecoderFactory.from_config(_C),
+                "caption_backward": _C.DISCRIMINATOR.TEXTUAL.CAPTION_BACKWARD
             }
 
         if _C.DISCRIMINATOR.VISUAL.DECODER:

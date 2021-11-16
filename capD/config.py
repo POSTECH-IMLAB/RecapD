@@ -99,6 +99,7 @@ class Config(object):
 
         _C.DISCRIMINATOR.TEXTUAL = CN()
         _C.DISCRIMINATOR.TEXTUAL.NAME = "transdec_postnorm::L1_H512_A8_F2048"
+        _C.DISCRIMINATOR.TEXTUAL.CAPTION_BACKWARD = True
         _C.DISCRIMINATOR.TEXTUAL.DROPOUT = 0.1
         _C.DISCRIMINATOR.TEXTUAL.PRETRAINED = False 
         _C.DISCRIMINATOR.TEXTUAL.FROZEN = False 
@@ -127,6 +128,7 @@ class Config(object):
         _C.GAN_LOSS.FA_FEATURE = "visual_features"
         _C.GAN_LOSS.LOGIT_STOP_GRAD = False
         _C.GAN_LOSS.SLOW_CAPG = False
+        _C.GAN_LOSS.CAP_COEFF = 1.
         
         _C.OPTIM = CN()
         _C.OPTIM.G = CN()
