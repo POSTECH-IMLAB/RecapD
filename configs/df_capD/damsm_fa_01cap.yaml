@@ -1,0 +1,73 @@
+RANDOM_SEED: 100
+AMP: false
+CUDNN_BENCHMARK: true
+CUDNN_DETERMINISTIC: false
+DATA:
+  IMAGE_CROP_SIZE: 128
+  IMAGE_TRANSFORM_TRAIN:
+  - random_resized_crop
+  - horizontal_flip
+  - normalize
+  IMAGE_TRANSFORM_TEST:
+  - smallest_resize
+  - center_crop
+  - normalize
+  MAX_CAPTION_LENGTH: 30
+  TOKENIZER_MODEL: datasets/vocab/coco14_10k.model
+DISCRIMINATOR:
+  NAME: capD #capD #df 
+  LOGITOR:
+    NAME: df
+    H: 512
+  TEXTUAL:
+    # A=H/64, F=4*H
+    NAME: transdec_postnorm::L1_H512_A8_F2048
+    CAPTION_BACKWARD: false
+    FROZEN: false
+    PRETRAINED: false
+  VISUAL:
+    NAME: df
+    FEATURE_SIZE: 32 
+    DECODER: false 
+    FROZEN: false
+    PRETRAINED: false
+GAN_LOSS:
+  D_LOSS_COMPONENT: logit,magp,cap
+  G_LOSS_COMPONENT: logit,img_fa
+  GP: true
+  CAP_COEFF: 0.1
+  FA_FEATURE: visual_features
+  LOGIT_INPUT: logit_features
+  LOGIT_STOP_GRAD: false
+  TYPE: hinge
+GENERATOR:
+  NAME: df
+  FEATURE_SIZE: 32 
+  NOISE_SIZE: 100
+OPTIM:
+  D:
+    BETAS:
+    - 0.0
+    - 0.9
+    CLIP_GRAD_NORM: 10.0
+    OPTIMIZER_NAME: adam
+    TEXT_LR: 0.0004
+    VISUAL_LR: 0.0004
+    UPDATE_EMB: false
+  G:
+    BETAS:
+    - 0.0
+    - 0.9
+    CLIP_GRAD_NORM: 0.0
+    OPTIMIZER_NAME: adam
+    TEXT_LR: 0.0001
+    VISUAL_LR: 0.0001
+    UPDATE_EMB: false
+TEXT_ENCODER:
+  DIR: ''
+  EMBEDDING_SIZE: 256
+  FROZEN: true
+  NAME: damsm
+TRAIN:
+  BATCH_SIZE: 32 
+  NUM_ITERATIONS: 300000
