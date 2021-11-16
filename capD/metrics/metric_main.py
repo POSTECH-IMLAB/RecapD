@@ -98,7 +98,7 @@ def clip_r_precision(opts):
 
 @register_metric
 def damsm_r_precision(opts):
-    r_prec = precision_recall.compute_damsm_r_precision(opts, num_gen=10000, R=1, r=100)
+    r_prec = precision_recall.compute_damsm_r_precision(opts, num_gen=30000, R=1, r=100)
     return dict(damsm_r_precision=r_prec)
 
 

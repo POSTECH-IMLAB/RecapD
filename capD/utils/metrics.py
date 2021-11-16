@@ -12,10 +12,15 @@ import os
 from subprocess import Popen, PIPE, check_call
 import tempfile
 from typing import Any, Dict, List
+from scipy.stats import truncnorm
 
 import numpy as np
 import torch
 
+def truncated_z_sample(batch_size, noise_size, truncation=0.5, seed=None):
+    state = None if seed is None else np.random.RandomState(seed)
+    values = truncnorm.rvs(-2, 2, size=(batch_size, noise_size), random_state=state)
+    return truncation * values
 
 class TopkAccuracy(object):
     r"""

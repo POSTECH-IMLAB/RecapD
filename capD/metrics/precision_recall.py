@@ -11,9 +11,14 @@ Metric for Assessing Generative Models". Matches the original implementation
 by Kynkaanniemi et al. at
 https://github.com/kynkaat/improved-precision-and-recall-metric/blob/master/precision_recall.py"""
 
+import os
+import numpy as np
+from PIL import Image
+from genericpath import exists
 from tqdm import tqdm
 import torch
 from . import metric_utils
+from ..utils.metrics import truncated_z_sample
 
 #----------------------------------------------------------------------------
 
@@ -44,7 +49,8 @@ def compute_damsm_r_precision(opts, num_gen=10000, R=1, r=100):
     for _ in tqdm(range(num_gen // r)):
         r_count = 0
         image_features = []
-        text_features = []
+        text_features = []    
+        keys = []
         # 1: gt, 99: mismatch 
         while r_count < r:
             images = []
@@ -56,7 +62,9 @@ def compute_damsm_r_precision(opts, num_gen=10000, R=1, r=100):
             tokens, tok_lens = batch["damsm_tokens"], batch["damsm_lengths"]
             hidden = opts.text_encoder.init_hidden(tokens.size(0))
             _, sent_embs = opts.text_encoder(tokens, tok_lens, hidden)
-            z = torch.randn([batch_size, opts.G.noise_size], device=opts.device)
+            #z = torch.randn([batch_size, opts.G.noise_size], device=opts.device)
+            z = truncated_z_sample(batch_size, opts.G.noise_size, seed=100)
+            z = torch.from_numpy(z).float().to(opts.device)
             img = opts.G(z, sent_embs)
             #img = batch["image"]
             images.append(img)
@@ -64,7 +72,20 @@ def compute_damsm_r_precision(opts, num_gen=10000, R=1, r=100):
             _, img_feat = model(images)
             image_features.append(img_feat)
             text_features.append(sent_embs)
+            if opts.save_img:
+                keys.append(batch["image_id"])
             r_count += batch_size
+            if opts.save_img:
+                os.makedirs(opts.save_dir, exist_ok=True)
+                for j in range(batch_size):
+                    im = img[j].data.cpu().numpy()
+                    im = (im + 1.0) * 127.5
+                    im = im.astype(np.uint8)
+                    im = np.transpose(im, (1,2,0))
+                    im = Image.fromarray(im)
+                    fullpath = os.path.join(opts.save_dir, f"{batch['image_id'][j]}.png")
+                    im.save(fullpath)
+
         image_features = torch.cat(image_features)[:r]
         text_features = torch.cat(text_features)[:r]
         image_norm = image_features / image_features.norm(dim=-1, keepdim=True)
@@ -73,59 +94,66 @@ def compute_damsm_r_precision(opts, num_gen=10000, R=1, r=100):
         _, inds = torch.topk(scores, k=R, largest=True)
         target = torch.arange(0, 100, device=opts.device)
         correct.append(torch.mean(inds.T.eq(target).float()))
+        try:
+            cor = inds.T.eq(target)
+            keys = np.array([y for x in keys for y in x][:r])
+            print(keys[cor[0].cpu()], len(keys[cor[0].cpu()]))
+        except:
+            print("need to debug")
+
     results["r_prec"] = torch.mean(torch.tensor(correct))
     return results["r_prec"]
 
-def compute_clip_r_precision(opts, num_gen=30000, R=1, r=100):
-    assert num_gen % r == 0
-    import clip
-    import torchvision.transforms as transforms
-    import numpy as np
-    model = opts.clip
-    data_iter = iter(opts.data_loader)
-    correct = []
-    results = dict()
+# def compute_clip_r_precision(opts, num_gen=30000, R=1, r=100):
+#     assert num_gen % r == 0
+#     import clip
+#     import torchvision.transforms as transforms
+#     import numpy as np
+#     model = opts.clip
+#     data_iter = iter(opts.data_loader)
+#     correct = []
+#     results = dict()
 
-    for _ in tqdm(range(num_gen // r)):
-        r_count = 0
-        image_features = []
-        text_features = []
-        # 1: gt, 99: mismatch 
-        while r_count < r:
-            images = []
-            batch = next(data_iter)
-            batch_size = opts.batch_size #batch["image"].size(0)
-            for key in batch:
-                if isinstance(batch[key], torch.Tensor):
-                    batch[key] = batch[key].to(opts.device)
-            tokens, tok_lens = batch["damsm_tokens"], batch["damsm_lengths"]
-            hidden = opts.text_encoder.init_hidden(tokens.size(0))
-            _, sent_embs = opts.text_encoder(tokens, tok_lens, hidden)
-            z = torch.randn([batch_size, opts.G.noise_size], device=opts.device)
-            #img = opts.G(z, sent_embs)
-            img = batch["image"]
-            img = (img * 127.5 + 128).clamp(0, 255).to(torch.uint8)
-            images.append(img)
-            images = torch.cat(images)
-            texts = clip.tokenize(batch["caption"]).to(opts.device)
-            # clip preprocess
-            images = torch.nn.functional.interpolate(images, (224, 224))
-            images = transforms.Normalize((0.48145466, 0.4578275, 0.40821073), (0.26862954, 0.26130258, 0.27577711))(images.float())
-            img_feat = model.encode_image(images)
-            text_feat = model.encode_text(texts)
-            image_features.append(img_feat)
-            text_features.append(text_feat)
-            r_count += batch_size
-        image_features = torch.cat(image_features)[:r]
-        text_features = torch.cat(text_features)[:r]
-        image_norm = image_features / image_features.norm(dim=-1, keepdim=True)
-        text_norm = text_features / text_features.norm(dim=-1, keepdim=True)
-        scores = torch.mm(image_features, text_features.T)
-        _, inds = torch.topk(scores, k=R, largest=True)
-        target = torch.arange(0, 100, device=opts.device)
-        correct.append(torch.mean(inds.T.eq(target).float()))
-    results["r_prec"] = torch.mean(torch.tensor(correct))
-    return results["r_prec"]
+#     for _ in tqdm(range(num_gen // r)):
+#         r_count = 0
+#         image_features = []
+#         text_features = []
+#         # 1: gt, 99: mismatch 
+#         while r_count < r:
+#             images = []
+#             batch = next(data_iter)
+#             batch_size = opts.batch_size #batch["image"].size(0)
+#             for key in batch:
+#                 if isinstance(batch[key], torch.Tensor):
+#                     batch[key] = batch[key].to(opts.device)
+#             tokens, tok_lens = batch["damsm_tokens"], batch["damsm_lengths"]
+#             hidden = opts.text_encoder.init_hidden(tokens.size(0))
+#             _, sent_embs = opts.text_encoder(tokens, tok_lens, hidden)
+#             z = torch.randn([batch_size, opts.G.noise_size], device=opts.device)
+#             #img = opts.G(z, sent_embs)
+#             img = batch["image"]
+#             img = (img * 127.5 + 128).clamp(0, 255).to(torch.uint8)
+#             images.append(img)
+#             images = torch.cat(images)
+#             texts = clip.tokenize(batch["caption"]).to(opts.device)
+#             # clip preprocess
+#             images = torch.nn.functional.interpolate(images, (224, 224))
+#             images = transforms.Normalize((0.48145466, 0.4578275, 0.40821073), (0.26862954, 0.26130258, 0.27577711))(images.float())
+#             img_feat = model.encode_image(images)
+#             text_feat = model.encode_text(texts)
+#             image_features.append(img_feat)
+#             text_features.append(text_feat)
+#             r_count += batch_size
+#         image_features = torch.cat(image_features)[:r]
+#         text_features = torch.cat(text_features)[:r]
+#         image_norm = image_features / image_features.norm(dim=-1, keepdim=True)
+#         text_norm = text_features / text_features.norm(dim=-1, keepdim=True)
+#         scores = torch.mm(image_features, text_features.T)
+#         _, inds = torch.topk(scores, k=R, largest=True)
+#         target = torch.arange(0, 100, device=opts.device)
+#         correct.append(torch.mean(inds.T.eq(target).float()))
+#     results["r_prec"] = torch.mean(torch.tensor(correct))
+#     return results["r_prec"]
 
 
 def compute_pr(opts, max_real, num_gen, nhood_size, row_batch_size, col_batch_size):

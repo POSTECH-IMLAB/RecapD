@@ -23,7 +23,8 @@ from .. import torch_utils
 
 class MetricOptions:
     def __init__(self, G=None, encoder=None, preprocess=None, text_encoder=None,
-    num_gpus=1, rank=0, device=None, data_loader = None, batch_size = 32, cache=True, **kwargs):
+    num_gpus=1, rank=0, device=None, data_loader = None, batch_size = 32, cache=True,
+    save_dir='', save_img=False, **kwargs):
         assert 0 <= rank < num_gpus
         self.G              = G
         self.encoder        = encoder  
@@ -35,6 +36,8 @@ class MetricOptions:
         self.cache          = cache
         self.data_loader    = data_loader
         self.batch_size     = batch_size
+        self.save_dir       = save_dir
+        self.save_img       = save_img
 
 #----------------------------------------------------------------------------
 
