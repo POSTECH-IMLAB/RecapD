@@ -5,7 +5,7 @@ AMP: false
 CUDNN_BENCHMARK: true
 CUDNN_DETERMINISTIC: false
 DATA:
-  IMAGE_CROP_SIZE: 128
+  IMAGE_CROP_SIZE: 256
   IMAGE_TRANSFORM_TRAIN:
   - random_resized_crop
   - horizontal_flip
