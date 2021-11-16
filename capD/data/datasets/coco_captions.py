@@ -1,14 +1,9 @@
-import json
 import os
 import pickle
-from collections import defaultdict
 from typing import Dict, List
-from nltk.tokenize import RegexpTokenizer
 import cv2
-from torch.utils import data
 from torch.utils.data import Dataset
 import numpy as np
-from itertools import chain, repeat
 
 class CocoCaptionsDataset(Dataset):
     r"""
