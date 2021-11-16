@@ -41,7 +41,10 @@ class DF_D(DiscriminatorModel):
     ) -> Dict[str, Any]:
         output_dict = {}
         # shape: (batch_size, channels, height, width)
-        visual_features = self.visual(image)
+        logit_features, dec_features, visual_features = self.visual(image, return_features=True)
+
+        output_dict["logit_features"] = logit_features
+        output_dict["dec_features"] = dec_features
         output_dict["visual_features"] = visual_features
         return output_dict
 
