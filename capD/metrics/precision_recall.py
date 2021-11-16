@@ -94,12 +94,12 @@ def compute_damsm_r_precision(opts, num_gen=10000, R=1, r=100):
         _, inds = torch.topk(scores, k=R, largest=True)
         target = torch.arange(0, 100, device=opts.device)
         correct.append(torch.mean(inds.T.eq(target).float()))
-        try:
-            cor = inds.T.eq(target)
-            keys = np.array([y for x in keys for y in x][:r])
-            print(keys[cor[0].cpu()], len(keys[cor[0].cpu()]))
-        except:
-            print("need to debug")
+        # try: # to see matched pair
+        #     cor = inds.T.eq(target)
+        #     keys = np.array([y for x in keys for y in x][:r])
+        #     print(keys[cor[0].cpu()], len(keys[cor[0].cpu()]))
+        # except:
+        #     print("need to debug")
 
     results["r_prec"] = torch.mean(torch.tensor(correct))
     return results["r_prec"]

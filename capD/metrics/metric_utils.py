@@ -17,7 +17,6 @@ import uuid
 import numpy as np
 import torch
 from .. import dnnlib
-from .. import torch_utils
 
 #----------------------------------------------------------------------------
 
