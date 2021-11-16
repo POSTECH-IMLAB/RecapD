@@ -372,6 +372,7 @@ def main(_A: argparse.Namespace):
                                 logger.info(log)
                                 wandb.log({key: result_dict["results"][key]}, step=iteration)
                             elif _A.logging == "tb":
+                                logger.info(log)
                                 tensorboard_writer.add_scalar(key, result_dict["results"][key], iteration)
                             else:
                                 logger.bind(metric=True).info(log)
