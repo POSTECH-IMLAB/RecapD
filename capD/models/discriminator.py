@@ -82,10 +82,12 @@ class CapD(DiscriminatorModel):
         # Compute features and captioning loss                
         output_dict = {}
         # shape: (batch_size, channels, height, width)
-        visual_features = self.visual(image)
-        batch_size = visual_features.size(0)
+        logit_features, dec_features, visual_features = self.visual(image, return_features=True)
+        batch_size = logit_features.size(0)
 
+        output_dict["logit_features"] = logit_features
         output_dict["visual_features"] = visual_features
+        output_dict["dec_features"] = dec_features
 
         if "caption_tokens" in batch:
             caption_tokens = batch["caption_tokens"]
@@ -95,12 +97,10 @@ class CapD(DiscriminatorModel):
             output_logits, projected_visual_features = self.textual(
                 visual_features, caption_tokens, caption_lengths
             )
-
             loss = self.loss(
                 output_logits[:, :-1].contiguous().view(-1, self.textual.vocab_size),
                 caption_tokens[:, 1:].contiguous().view(-1),
             )
-
             output_dict["cap_loss"] = loss
             output_dict["projected_visual_features"] = projected_visual_features
 
