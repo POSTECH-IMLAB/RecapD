@@ -74,7 +74,7 @@ def main(_A: argparse.Namespace):
         collate_fn=test_dataset.collate_fn,
     )
     
-    netG = GeneratorFactory.from_config(_C).to(device)
+    netG_ema = GeneratorFactory.from_config(_C).to(device)
 
     # For text encoder
     if _C.TEXT_ENCODER.NAME == "damsm":
@@ -88,7 +88,7 @@ def main(_A: argparse.Namespace):
 
     if _A.resume_from is not None:
         start_iteration = CheckpointManager(
-            netG=netG 
+            netG_ema=netG_ema 
         ).load(_A.resume_from)
     else:
         raise NotImplementedError
@@ -97,11 +97,6 @@ def main(_A: argparse.Namespace):
     # -------------------------------------------------------------------------
     #   TRAINING LOOP
     # -------------------------------------------------------------------------
-    org_dir = f'eval/org128'
-    save_org = False
-    if not os.path.isdir(org_dir):
-        os.makedirs(org_dir, exist_ok=True)
-        save_org = True
     name = _A.resume_from.split('/')[1]
     save_dir = f'eval/{name}'
     os.makedirs(save_dir, exist_ok=True)
@@ -116,7 +111,7 @@ def main(_A: argparse.Namespace):
             _, sent_embs = text_encoder(tokens, tok_lens, hidden)
 
             z = torch.randn(_C.TRAIN.BATCH_SIZE, _C.GENERATOR.NOISE_SIZE).to(device)
-            fakes = netG(z, sent_embs)
+            fakes = netG_ema(z, sent_embs)
 
         for j in range(_C.TRAIN.BATCH_SIZE):
             im = fakes[j].data.cpu().numpy()
@@ -126,16 +121,8 @@ def main(_A: argparse.Namespace):
             im =  Image.fromarray(im)
             fullpath = os.path.join(save_dir, f'{batch["image_id"][j]}.png')
             im.save(fullpath)
-            if save_org:
-                org = batch["image"][j].data.cpu().numpy() 
-                org = (org + 1.0) * 127.5
-                org = org.astype(np.uint8)
-                org = np.transpose(org, (1,2,0))
-                org =  Image.fromarray(org)
-                fullpath = os.path.join(org_dir, f'{batch["image_id"][j]}.png')
-                org.save(fullpath)
             cnt += 1
-            if cnt >= 30000:
+            if cnt >= 40000:
                 cond = True
                 break
         if cond:
