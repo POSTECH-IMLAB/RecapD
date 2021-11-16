@@ -12,7 +12,7 @@ class LogitorBackbone(nn.Module):
         self.H = H 
         self.cond_size = cond_size
         self.contra = contra
-        self.proj_cond = nn.Linear(cond_size, 256)
+        self.proj_cond = nn.Linear(cond_size, 256) if cond_size != 256 else nn.Identity()
         if self.contra:
             self.proj_img = nn.Linear(H, 256)
 
