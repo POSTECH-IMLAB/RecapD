@@ -353,6 +353,7 @@ def main(_A: argparse.Namespace):
                             logger.info(log)
                             wandb.log({"cap_fake": fake_dict["cap_loss"], "cap_real": real_dict["cap_loss"]}, step=iteration)
                         elif _A.logging == "tb":
+                            logger.info(log)
                             tensorboard_writer.add_scalar("cap_fake",fake_dict["cap_loss"], iteration)
                             tensorboard_writer.add_scalar("cap_real",real_dict["cap_loss"], iteration)
                         else:
