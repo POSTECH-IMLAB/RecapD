@@ -12,7 +12,7 @@ import os
 import time
 import json
 import torch
-from . import dnnlib
+from .. import dnnlib
 from . import metric_utils
 from . import frechet_inception_distance
 from . import precision_recall
@@ -77,8 +77,8 @@ def report_metric(result_dict, run_dir=None, snapshot_pkl=None):
 #----------------------------------------------------------------------------
 # Recommended metrics.
 @register_metric
-def damsm_fid30k_full(opts):
-    fid = frechet_inception_distance.compute_damsm_fid(opts, max_real=None, num_gen=30000)
+def inception_fid30k_full(opts):
+    fid = frechet_inception_distance.compute_fid(opts, max_real=None, num_gen=30000)
     return dict(fid30k_full=fid)
 
 @register_metric

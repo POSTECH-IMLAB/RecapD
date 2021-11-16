@@ -16,7 +16,8 @@ import copy
 import uuid
 import numpy as np
 import torch
-from . import dnnlib
+from .. import dnnlib
+from .. import torch_utils
 
 #----------------------------------------------------------------------------
 
@@ -150,7 +151,7 @@ class FeatureStats:
         return obj
 
 #----------------------------------------------------------------------------
-def compute_damsm_feature_stats_for_dataset(opts, max_items=None, **stats_kwargs):
+def compute_feature_stats_for_dataset(opts, max_items=None, **stats_kwargs):
 
     # Try to lookup from cache.
     cache_file = None
@@ -180,10 +181,11 @@ def compute_damsm_feature_stats_for_dataset(opts, max_items=None, **stats_kwargs
     encoder = opts.encoder
 
     # Main loop.
-    for images, _labels in opts.data_loader:
+    for batch in opts.data_loader:
+        images = batch["image"]
         if images.shape[1] == 1:
             images = images.repeat([1, 3, 1, 1])
-        features = encoder(images.to(opts.device))
+        features = encoder(images.to(opts.device), return_features = True)
         stats.append_torch(features, num_gpus=opts.num_gpus, rank=opts.rank)
 
     # Save to cache.
@@ -240,7 +242,7 @@ def compute_clip_feature_stats_for_dataset(opts, max_items=None, **stats_kwargs)
     return stats
 
 #----------------------------------------------------------------------------
-def compute_damsm_feature_stats_for_generator(opts,  **stats_kwargs):
+def compute_feature_stats_for_generator(opts,  **stats_kwargs):
     # Initialize.
     stats = FeatureStats(**stats_kwargs)
     assert stats.max_items is not None
@@ -266,7 +268,7 @@ def compute_damsm_feature_stats_for_generator(opts,  **stats_kwargs):
         images = torch.cat(images)
         if images.shape[1] == 1:
             images = images.repeat([1, 3, 1, 1])
-        features = encoder(images)
+        features = encoder(images, return_features=True)
         stats.append_torch(features, num_gpus=opts.num_gpus, rank=opts.rank)
     return stats
 
