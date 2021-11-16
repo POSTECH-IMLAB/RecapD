@@ -13,7 +13,6 @@ import torch
 from torch import nn
 from torch.cuda import amp
 from torch.utils.data import DataLoader, DistributedSampler
-import wandb
 import torchvision.utils as vutils
 
 # fmt: off
