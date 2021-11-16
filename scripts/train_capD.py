@@ -55,7 +55,7 @@ group.add_argument(
     "--metrics", type=str, default="damsm_r_precision"
 )
 group.add_argument(
-    "--prefix", type=str, default="local" 
+    "--prefix", type=str, default="debug" 
 )
 # fmt: on
 
