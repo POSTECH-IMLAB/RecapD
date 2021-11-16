@@ -6,8 +6,6 @@ import sys
 sys.path.append(os.path.abspath(__file__).split("scripts")[0])
 
 import argparse
-from collections import Counter
-from itertools import accumulate
 from typing import Any
 
 from loguru import logger
@@ -15,7 +13,6 @@ import torch
 from torch import nn
 from torch.cuda import amp
 from torch.utils.data import DataLoader, DistributedSampler
-#from torch.utils.tensorboard import SummaryWriter
 import wandb
 import torchvision.utils as vutils
 
@@ -31,7 +28,6 @@ import capD.utils.distributed as dist
 from capD.utils.timer import Timer
 from capD.modules.gan_loss import GANLoss
 from capD.modules.embedding import CNN_ENCODER, RNN_ENCODER
-from capD.models.captioning import VirTexModel 
 from capD.metrics.metric_main import calc_metric
 
 parser = common_parser(
@@ -43,7 +39,7 @@ group.add_argument(
     help="Path to a checkpoint to resume training from (if provided)."
 )
 group.add_argument(
-    "--checkpoint-every", type=int, default=1000, #default=4000,
+    "--checkpoint-every", type=int, default=20, #default=4000,
     help="Serialize model to a checkpoint after every these many iterations.",
 )
 group.add_argument(
@@ -52,10 +48,13 @@ group.add_argument(
     only master process logs averaged loss values across processes.""",
 )
 group.add_argument(
-    "--metrics", type=str, default="damsm_r_precision"
+    "--metrics", type=str, default="damsm_r_precision10k"
 )
 group.add_argument(
     "--prefix", type=str, default="debug" 
+)
+group.add_argument(
+    "--logging", type=str, default="local"
 )
 # fmt: on
 
@@ -66,6 +65,15 @@ def main(_A: argparse.Namespace):
         device: Any = torch.device("cpu")
     else:
         device = torch.cuda.current_device()
+
+    if _A.logging == "wb":
+        import wandb
+    elif _A.logging == "tb":
+        from torch.utils.tensorboard import SummaryWriter
+    else:
+        logger.add(os.path.join(_A.serialization_dir, "metric.log"), filter=lambda record: "metric" in record["extra"])
+        logger.add(os.path.join(_A.serialization_dir, "loss.log"), filter=lambda record: "loss" in record["extra"])
+
 
     _C = Config(_A.config, _A.config_override)
     common_setup(_C, _A)
@@ -209,11 +217,12 @@ def main(_A: argparse.Namespace):
         logger.info(f"netD param: {count_params(netD)}")
         #tensorboard_writer = SummaryWriter(log_dir=_A.serialization_dir)
         #tensorboard_writer.add_text("config", f"```\n{_C}\n```")
-        wandb.init(project=f"{_A.prefix}_capD")
-        wandb.config.update(_C)
-        wandb.run.name = _A.config.split("configs/")[-1].split(".yaml")[0]
-        wandb.run.save()
-        wandb.watch((netG, netD), log_freq = _A.log_every)
+        if _A.logging == "wb":
+            wandb.init(project=f"{_A.prefix}_capD")
+            wandb.config.update(_C)
+            wandb.run.name = _A.config.split("configs/")[-1].split(".yaml")[0]
+            wandb.run.save()
+            wandb.watch((netG, netD), log_freq = _A.log_every)
 
         checkpoint_manager = CheckpointManager(
             _A.serialization_dir,
@@ -236,9 +245,11 @@ def main(_A: argparse.Namespace):
 
         batch = next(train_dataloader_iter)
         # Train Discriminator
-        z = torch.randn(_C.TRAIN.BATCH_SIZE, _C.GENERATOR.NOISE_SIZE).to(device)
-        batch["z"] = z
-        d_loss_dict, rec, cap_real = gan_loss.compute_d_loss(batch, text_encoder, netG, netD) 
+        z = torch.randn(_C.TRAIN.BATCH_SIZE, _C.GENERATOR.NOISE_SIZE).to(device).detach()
+        sent_embs = gan_loss.get_sent_embs(batch, text_encoder).detach()
+        fakes =  netG(z, sent_embs)
+
+        d_loss_dict, rec, cap_real = gan_loss.compute_d_loss(batch, sent_embs, fakes, netD) 
         errD = gan_loss.accumulate_loss(d_loss_dict)
 
         optD.zero_grad(), optG.zero_grad()
@@ -248,7 +259,7 @@ def main(_A: argparse.Namespace):
         optD.step()
 
         if _C.GAN_LOSS.GP:
-            gp_loss_dict = gan_loss.compute_gp(batch, text_encoder, netD)
+            gp_loss_dict = gan_loss.compute_gp(batch, sent_embs, netD)
             errD_reg = gan_loss.accumulate_loss(gp_loss_dict)
 
             optD.zero_grad(), optG.zero_grad()
@@ -258,7 +269,7 @@ def main(_A: argparse.Namespace):
             optD.step()
 
         # Train Generator
-        g_loss_dict, fakes, cap_fake = gan_loss.compute_g_loss(batch, text_encoder, netG, netD)
+        g_loss_dict, cap_fake = gan_loss.compute_g_loss(batch, sent_embs, fakes, netD)
         if _C.GAN_LOSS.SLOW_CAPG:
             if g_loss_dict["errG_cap"] < d_loss_dict["errD_cap"]:
                 del g_loss_dict["errG_cap"]
@@ -283,7 +294,6 @@ def main(_A: argparse.Namespace):
                 log += f'{key}: {d_loss_dict[key].detach():.3f} '
             for key in g_loss_dict:
                 log += f'{key}: {g_loss_dict[key].detach():.3f} '
-            logger.info(log)
             if _A.config == "configs/debug.yaml":
                 vutils.save_image(fakes.data, f'fake.png', normalize=True, scale_each=True)
                 vutils.save_image(batch["image"].data, f"real.png", normalize=True, scale_each=True)
@@ -294,10 +304,17 @@ def main(_A: argparse.Namespace):
                     logger.info(train_dataset.tokenizer.decode(cap_real[0].detach().tolist()))
                     logger.info(train_dataset.tokenizer.decode(cap_fake[0].detach().tolist())) if cap_fake is not None else None
             if dist.is_master_process():
-                wandb.log(d_loss_dict, step=iteration)
-                wandb.log(g_loss_dict, step=iteration)
-                # tensorboard_writer.add_scalars("D", d_loss_dict, iteration)
-                # tensorboard_writer.add_scalars("G", g_loss_dict, iteration)
+                if _A.logging == "wb":
+                    logger.info(log)
+                    wandb.log(d_loss_dict, step=iteration)
+                    wandb.log(g_loss_dict, step=iteration)
+                elif _A.logging == "tb":
+                    logger.info(log)
+                    raise NotImplementedError
+                    # tensorboard_writer.add_scalars("D", d_loss_dict, iteration)
+                    # tensorboard_writer.add_scalars("G", g_loss_dict, iteration)
+                else:
+                    logger.bind(loss=True).info(log)
 
         # ---------------------------------------------------------------------
         #  Checkpointing
@@ -330,11 +347,14 @@ def main(_A: argparse.Namespace):
                         logger.info(f"org: {org}")
                         logger.info(f"real: {real}")
                         logger.info(f"fake: {fake}")
-                        logger.info(f"cap_fake: {fake_dict['cap_loss'].detach():.3f}, cap_real: {real_dict['cap_loss'].detach():.3f}")
-
-                        text_table = wandb.Table(columns=["Org", "Real", "Fake"])
-                        text_table.add_data(org, real, fake)
-                        wandb.log({"cap": text_table, "cap_fake": fake_dict["cap_loss"], "cap_real": real_dict["cap_loss"]}, step=iteration)
+                        log = f"cap_fake: {fake_dict['cap_loss'].detach():.3f}, cap_real: {real_dict['cap_loss'].detach():.3f}"
+                        if _A.logging == "wb":   
+                            logger.info(log)
+                            wandb.log({"cap_fake": fake_dict["cap_loss"], "cap_real": real_dict["cap_loss"]}, step=iteration)
+                        elif _A.logging == "tb":
+                            raise NotImplementedError
+                        else:
+                            logger.bind(loss=True).info(f"{iteration}: {log}")
 
                         #tensorboard_writer.add_text("captioning",f"{org} \n\n{real} \n\n{fake}")
 
@@ -344,9 +364,15 @@ def main(_A: argparse.Namespace):
                             kwargs["encoder"] = model
                         result_dict = calc_metric(**kwargs)
                         for key in result_dict["results"]:
-                            logger.info(f"Eval metrics, {key}: {result_dict['results'][key].detach()}")
-                            wandb.log({key: result_dict["results"][key]}, step=iteration)
-                            #tensorboard_writer.add_scalar(key, result_dict["results"][key], iteration)
+                            log = f"{iteration} | Eval metrics, {key}: {result_dict['results'][key].detach()}"
+                            if _A.logging == "wb":
+                                logger.info(log)
+                                wandb.log({key: result_dict["results"][key]}, step=iteration)
+                            elif _A.logging == "tb":
+                                raise NotImplementedError
+                                #tensorboard_writer.add_scalar(key, result_dict["results"][key], iteration)
+                            else:
+                                logger.bind(metric=True).info(log)
 
             # if dist.is_master_process():
             #     tensorboard_writer.add_scalars("val", val_loss_dict, iteration)

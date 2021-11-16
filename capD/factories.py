@@ -399,7 +399,6 @@ class VisualBackboneFactory(Factory):
     """
 
     PRODUCTS: Dict[str, Callable] = {
-        "torchvision": visual_backbones.TorchvisionVisualBackbone,
         "df": visual_backbones.DF_DISC,
     }
 
@@ -416,18 +415,9 @@ class VisualBackboneFactory(Factory):
 
         _C = config
         kwargs = {"visual_feature_size": _C.DISCRIMINATOR.VISUAL.FEATURE_SIZE}
-
-        if "torchvision" in _C.DISCRIMINATOR.VISUAL.NAME:
-            # Check the name for models from torchvision.
-            cnn_name = _C.DISCRIMINATOR.VISUAL.NAME.split("::")[-1]
-            kwargs["pretrained"] = _C.DISCRIMINATOR.VISUAL.PRETRAINED
-            kwargs["frozen"] = _C.DISCRIMINATOR.VISUAL.FROZEN
-
-            return cls.create("torchvision", cnn_name, **kwargs)
-        else:
-            kwargs["img_size"] = _C.DATA.IMAGE_CROP_SIZE
-            kwargs["H"] = _C.DISCRIMINATOR.LOGITOR.H
-            return cls.create(_C.DISCRIMINATOR.VISUAL.NAME, **kwargs)
+        kwargs["img_size"] = _C.DATA.IMAGE_CROP_SIZE
+        kwargs["H"] = _C.DISCRIMINATOR.LOGITOR.H
+        return cls.create(_C.DISCRIMINATOR.VISUAL.NAME, **kwargs)
 
 
 class TextualHeadFactory(Factory):
@@ -523,49 +513,6 @@ class CaptionDecoderFactory(Factory):
             kwargs["nucleus_size"] = _C.DISCRIMINATOR.TEXTUAL.DECODER.NUCLEUS_SIZE
 
         return cls.create(_C.DISCRIMINATOR.TEXTUAL.DECODER.NAME, **kwargs)
-        
-        
-class OptimizerFactory(Factory):
-    r"""Factory to create optimizers. Possible choices: ``{"sgd", "adamw"}``."""
-
-    PRODUCTS: Dict[str, Callable] = {"sgd": optim.SGD, "adamw": optim.AdamW, "adam":optim.Adam, }
-
-    @classmethod
-    def from_config(
-        cls, config: Config, named_parameters: Iterable[Any]
-    ) -> optim.Optimizer:
-        r"""
-        Create an optimizer directly from config.
-
-        Parameters
-        ----------
-        config: capD.config.Config
-            Config object with all the parameters.
-        named_parameters: Iterable
-            Named parameters of model (retrieved by ``model.named_parameters()``)
-            for the optimizer. We use named parameters to set different LR and
-            turn off weight decay for certain parameters based on their names.
-        """
-
-        _C = config
-
-        # Set different learning rate for CNN and rest of the model during
-        # pretraining. This doesn't matter for downstream evaluation because
-        # there are no modules with "cnn" in their name.
-        # Also turn off weight decay for layer norm and bias in textual stream.
-        param_groups = []
-        for name, param in named_parameters:
-            #wd = 0.0 if re.match(_C.OPTIM.NO_DECAY, name) else _C.OPTIM.WEIGHT_DECAY
-            lr = _C.TEXT_LR if "textual" in name else _C.VISUAL_LR
-            param_groups.append({"params": [param], "lr": lr}) #"weight_decay": wd})
-
-        if _C.OPTIMIZER_NAME == "sgd":
-            kwargs = {"momentum": _C.SGD_MOMENTUM}
-        else:
-            kwargs = {"betas": _C.BETAS}
-
-        optimizer = cls.create(_C.OPTIMIZER_NAME, param_groups, **kwargs)
-        return optimizer
 
 class PretrainingModelFactory(Factory):
     r"""
