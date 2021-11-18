@@ -1,11 +1,9 @@
 RANDOM_SEED: 100
 AMP: false
-RANDOM_SEED: 100
-AMP: false
 CUDNN_BENCHMARK: true
 CUDNN_DETERMINISTIC: false
 DATA:
-  IMAGE_CROP_SIZE: 256
+  IMAGE_CROP_SIZE: 128
   IMAGE_TRANSFORM_TRAIN:
   - random_resized_crop
   - horizontal_flip
@@ -24,7 +22,7 @@ DISCRIMINATOR:
   TEXTUAL:
     # A=H/64, F=4*H
     NAME: transdec_postnorm::L1_H512_A8_F2048
-    CAPTION_BACKWARD: false
+    CAPTION_BACKWARD: true 
     FROZEN: false
     PRETRAINED: false
   VISUAL:
@@ -37,7 +35,7 @@ GAN_LOSS:
   D_LOSS_COMPONENT: logit,magp,cap,img_rec
   G_LOSS_COMPONENT: logit,img_fa
   GP: true
-  CAP_COEFF: 0.1
+  CAP_COEFF: 1.
   FA_FEATURE: visual_features
   LOGIT_INPUT: logit_features
   LOGIT_STOP_GRAD: false
@@ -71,5 +69,5 @@ TEXT_ENCODER:
   FROZEN: true
   NAME: damsm
 TRAIN:
-  BATCH_SIZE: 24 
-  NUM_ITERATIONS: 415000
+  BATCH_SIZE: 32 
+  NUM_ITERATIONS: 300000
