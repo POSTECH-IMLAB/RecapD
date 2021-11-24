@@ -35,6 +35,7 @@ class GANLoss():
         self.g_loss_component = cfg.G_LOSS_COMPONENT.split(',')
         self.logit_input = cfg.LOGIT_INPUT
         self.logit_stop_grad = cfg.LOGIT_STOP_GRAD
+        self.cap_stop_grad = cfg.CAP_STOP_GRAD
         self.fa_feature = cfg.FA_FEATURE
 
         self.cap_coeff = cfg.CAP_COEFF 
@@ -84,6 +85,7 @@ class GANLoss():
         kwargs = {"image":batch["image"]} 
         if "cap" in self.d_loss_component:
             kwargs["batch"] = batch
+            kwargs["cap_stop_grad"] = self.cap_stop_grad
         real_dict = netD(**kwargs)
         fake_dict = netD(fakes.detach())
         if "logit" in self.d_loss_component:

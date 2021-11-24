@@ -79,7 +79,8 @@ class CapD(DiscriminatorModel):
     def forward(
         self, 
         image: torch.Tensor, 
-        batch: Dict[str, torch.Tensor] = {}, 
+        batch: Dict[str, torch.Tensor] = {},
+        cap_stop_grad: bool = False, 
     ) -> Dict[str, Any]:
 
         # Compute features and captioning loss                
@@ -97,6 +98,9 @@ class CapD(DiscriminatorModel):
             caption_lengths = batch["caption_lengths"]
 
             # shape: (batch_size, max_caption_length, vocab_size)
+            if cap_stop_grad:
+                visual_features = visual_features.detach()
+                
             output_logits, projected_visual_features = self.textual(
                 visual_features, caption_tokens, caption_lengths
             )
