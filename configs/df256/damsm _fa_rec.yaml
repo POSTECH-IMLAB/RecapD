@@ -40,16 +40,16 @@ DISCRIMINATOR:
   VISUAL:
     NAME: df
     FEATURE_SIZE: 32
-    DECODER: false
+    DECODER: true 
     FROZEN: false
     PRETRAINED: false
 GAN_LOSS:
   CAP_COEFF: 1.0
   CAP_STOP_GRAD: false
-  D_LOSS_COMPONENT: logit,magp
-  FA_FEATURE: visual_features
+  D_LOSS_COMPONENT: logit,magp,img_rec
+  FA_FEATURE: dec_features
   GP: true
-  G_LOSS_COMPONENT: logit
+  G_LOSS_COMPONENT: logit,img_fa
   LOGIT_INPUT: logit_features
   LOGIT_STOP_GRAD: false
   SLOW_CAPG: false
