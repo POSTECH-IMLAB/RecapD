@@ -158,8 +158,8 @@ class GANLoss():
         if 'img_fa' in self.g_loss_component:
             with torch.no_grad():
                 real_dict=netD(batch["image"])
-                real_feat = real_dict["dec_features"]
-            fake_feat = fake_dict["dec_features"]
+                real_feat = real_dict[self.fa_feature]
+            fake_feat = fake_dict[self.fa_feature]
             errG_fa = torch.abs(fake_feat-real_feat.detach()).mean()
             loss.update(errG_fa=errG_fa)
 
