@@ -41,7 +41,10 @@ class GANLoss():
         self.cap_coeff = cfg.CAP_COEFF 
 
         if "img_rec" in self.d_loss_component:
-            self.perceptual_fn = lpips.LPIPS(net="vgg").cuda()
+            #self.perceptual_fn = lpips.LPIPS(net="vgg").cuda()
+            #self.perceptual_fn.net.requires_grad_ = False
+            self.rec_fn = nn.MSELoss()
+            
 
     def get_sent_embs(self, batch, text_encoder):
         if not isinstance(text_encoder, RNN_ENCODER):
@@ -117,7 +120,8 @@ class GANLoss():
         
         if "img_rec" in self.d_loss_component: 
             rec = netD.img_decoder(real_dict["dec_features"])
-            errD_rec = self.perceptual_fn(rec, batch["image"].detach()).mean()
+            #errD_rec = self.perceptual_fn(rec, batch["image"].detach()).mean()
+            errD_rec = self.rec_fn(rec, batch["image"].detach())
             loss.update(errD_rec = errD_rec)
 
         if "sent_contra" in self.d_loss_component:
