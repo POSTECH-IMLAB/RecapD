@@ -86,7 +86,7 @@ OPTIM:
     BETAS:
     - 0.0
     - 0.9
-    CLIP_GRAD_NORM: 0.0
+    CLIP_GRAD_NORM: 10.0
     LOOKAHEAD:
       ALPHA: 0.5
       STEPS: 5
