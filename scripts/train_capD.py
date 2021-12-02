@@ -298,7 +298,7 @@ def main(_A: argparse.Namespace):
             if rec is not None:
                 vutils.save_image(rec.data, f'rec.png', normalize=True, scale_each=True)
             if "cap" in _C.GAN_LOSS.D_LOSS_COMPONENT:
-                logger.info(batch["caption"][0])
+                logger.info(train_dataset.tokenizer.decode(batch["caption_tokens"][0].detach().tolist()))
                 logger.info(train_dataset.tokenizer.decode(cap_real[0].detach().tolist()))
                 logger.info(train_dataset.tokenizer.decode(cap_fake[0].detach().tolist())) if cap_fake is not None else None
 

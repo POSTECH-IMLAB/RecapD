@@ -7,7 +7,7 @@ from torch import nn
 import torch.nn.functional as F
 from capD.modules.embedding import RNN_ENCODER
 
-import lpips
+#import lpips
 
 def magp(img, sent, netD):
     img_inter = (img.data).requires_grad_()

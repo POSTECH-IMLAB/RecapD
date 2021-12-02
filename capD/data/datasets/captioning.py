@@ -58,7 +58,6 @@ class DAMSMCaptioningDataset(Dataset):
         caption_tokens = self.caption_transform(caption=caption)["caption"]
         return {
             "image_id": image_id,
-            "caption": caption,
             "image": torch.tensor(image, dtype=torch.float),
             "caption_tokens": torch.tensor(caption_tokens, dtype=torch.long),
             "noitpac_tokens": torch.tensor(caption_tokens, dtype=torch.long).flip(0),
@@ -91,7 +90,6 @@ class DAMSMCaptioningDataset(Dataset):
         return {
             "image_id": [d["image_id"] for d in data],
             "image": torch.stack([d["image"] for d in data], dim=0),
-            "caption": [d["caption"] for d in data],
             "caption_tokens": caption_tokens,
             "noitpac_tokens": noitpac_tokens,
             "caption_lengths": torch.stack([d["caption_lengths"] for d in data]),
