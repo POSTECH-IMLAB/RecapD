@@ -59,8 +59,8 @@ DISCRIMINATOR:
   
 GAN_LOSS:
   TYPE: hinge
-  D_LOSS_COMPONENT: uncond_logit, cap # cond_logit, uncond_logit, cap, img_rec
-  G_LOSS_COMPONENT: uncond_logit, cap # cond_logit, uncond_logit, cap, img_fa
+  D_LOSS_COMPONENT: uncond_logit,cap # cond_logit, uncond_logit, cap, img_rec
+  G_LOSS_COMPONENT: uncond_logit,cap # cond_logit, uncond_logit, cap, img_fa
   CAP_COEFF: 1.
   GP: r1 # magp, r1 
   REG_COEFF: 10.
