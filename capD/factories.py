@@ -400,7 +400,7 @@ class VisualBackboneFactory(Factory):
     """
 
     PRODUCTS: Dict[str, Callable] = {
-        "torchvision": visual_backbones.TorchvisionVisualBackbone,
+        #"torchvision": visual_backbones.TorchvisionVisualBackbone,
         "df": visual_backbones.DF_DISC,
     }
 
