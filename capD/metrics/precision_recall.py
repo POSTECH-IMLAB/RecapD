@@ -46,11 +46,10 @@ def compute_damsm_r_precision(opts, num_gen=10000, R=1, r=100):
     correct = []
     results = dict()
 
-    for _ in tqdm(range(num_gen // r)):
+    for _ in range(num_gen // r):
         r_count = 0
         image_features = []
         text_features = []    
-        keys = []
         # 1: gt, 99: mismatch 
         while r_count < r:
             images = []
@@ -72,19 +71,7 @@ def compute_damsm_r_precision(opts, num_gen=10000, R=1, r=100):
             _, img_feat = model(images)
             image_features.append(img_feat)
             text_features.append(sent_embs)
-            if opts.save_img:
-                keys.append(batch["image_id"])
             r_count += batch_size
-            if opts.save_img:
-                os.makedirs(opts.save_dir, exist_ok=True)
-                for j in range(batch_size):
-                    im = img[j].data.cpu().numpy()
-                    im = (im + 1.0) * 127.5
-                    im = im.astype(np.uint8)
-                    im = np.transpose(im, (1,2,0))
-                    im = Image.fromarray(im)
-                    fullpath = os.path.join(opts.save_dir, f"{batch['image_id'][j]}.png")
-                    im.save(fullpath)
 
         image_features = torch.cat(image_features)[:r]
         text_features = torch.cat(text_features)[:r]
@@ -100,7 +87,6 @@ def compute_damsm_r_precision(opts, num_gen=10000, R=1, r=100):
         #     print(keys[cor[0].cpu()], len(keys[cor[0].cpu()]))
         # except:
         #     print("need to debug")
-
     results["r_prec"] = torch.mean(torch.tensor(correct))
     return results["r_prec"]
 
