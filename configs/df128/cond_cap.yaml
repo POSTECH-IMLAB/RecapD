@@ -40,7 +40,7 @@ GENERATOR:
   NOISE_SIZE: 100
 
 DISCRIMINATOR:
-  NAME: df #capD #df 
+  NAME: capD #capD #df 
   VISUAL:
     NAME: df
     FEATURE_SIZE: 32 
@@ -48,7 +48,7 @@ DISCRIMINATOR:
     FROZEN: false
     PRETRAINED: false
   LOGITOR:
-    NAME: df_uncond # df df_uncond
+    NAME: df # df df_uncond
     H: 512
   TEXTUAL:
     # A=H/64, F=4*H
@@ -59,10 +59,10 @@ DISCRIMINATOR:
   
 GAN_LOSS:
   TYPE: hinge
-  D_LOSS_COMPONENT: uncond_logit # cond_logit, uncond_logit, cap, img_rec
-  G_LOSS_COMPONENT: uncond_logit # cond_logit, uncond_logit, cap, img_fa
+  D_LOSS_COMPONENT: cond_logit, cap # cond_logit, uncond_logit, cap, img_rec
+  G_LOSS_COMPONENT: cond_logit, cap # cond_logit, uncond_logit, cap, img_fa
   CAP_COEFF: 1.
-  GP: r1 # magp, r1 
+  GP: magp # magp, r1 
   REG_COEFF: 10.
   FA_FEATURE: dec_features # dec_features, logit_features, visual_features
   LOGIT_INPUT: logit_features 
@@ -73,7 +73,7 @@ OPTIM:
     BETAS:
     - 0.0
     - 0.9
-    CLIP_GRAD_NORM: 0.0
+    CLIP_GRAD_NORM: 10.0
     OPTIMIZER_NAME: adam
     TEXT_LR: 0.0004
     VISUAL_LR: 0.0004
@@ -82,7 +82,7 @@ OPTIM:
     BETAS:
     - 0.0
     - 0.9
-    CLIP_GRAD_NORM: 0.0
+    CLIP_GRAD_NORM: 10.0
     OPTIMIZER_NAME: adam
     TEXT_LR: 0.0001
     VISUAL_LR: 0.0001
