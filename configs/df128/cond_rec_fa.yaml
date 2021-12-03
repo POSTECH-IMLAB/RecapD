@@ -48,7 +48,7 @@ DISCRIMINATOR:
     FROZEN: false
     PRETRAINED: false
   LOGITOR:
-    NAME: df_cond # df df_uncond
+    NAME: df # df df_uncond
     H: 512
   TEXTUAL:
     # A=H/64, F=4*H
