@@ -25,7 +25,7 @@ from capD.utils.checkpointing import CheckpointManager, update_average
 from capD.utils.common import common_parser, common_setup, count_params, cycle, seed_worker
 import capD.utils.distributed as dist
 from capD.utils.timer import Timer
-from capD.modules.gan_loss import GANLoss
+from capD.modules.gan_loss import GANLoss, magp, r1
 from capD.modules.embedding import CNN_ENCODER, RNN_ENCODER
 from capD.metrics.metric_main import calc_metric
 
@@ -175,6 +175,11 @@ def main(_A: argparse.Namespace):
             g_param_group.append({"params":[param], "lr":_C.OPTIM.G.VISUAL_LR})
 
     d_param_group = []
+    
+    #TODO: lazy
+    #reg_interval = 16
+    #mb_ratio = reg_interval / (reg_interval + 1)
+
     if not _C.OPTIM.D.UPDATE_EMB:
         text_encoder.requires_grad_(False)
     for name, param in netD.named_parameters():
@@ -237,6 +242,7 @@ def main(_A: argparse.Namespace):
     # -------------------------------------------------------------------------
     #   TRAINING LOOP
     # -------------------------------------------------------------------------
+    
     for iteration in range(start_iteration + 1, _C.TRAIN.NUM_ITERATIONS + 1):
         timer.tic()
         netG.train(), netD.train(), 
@@ -258,14 +264,11 @@ def main(_A: argparse.Namespace):
             torch.nn.utils.clip_grad_norm_(netD.parameters(), _C.OPTIM.D.CLIP_GRAD_NORM)
         optD.step()
 
-        if _C.GAN_LOSS.GP:
-            gp_loss_dict = gan_loss.compute_gp(batch, sent_embs, netD)
-            errD_reg = gan_loss.accumulate_loss(gp_loss_dict)
-
+        if _C.GAN_LOSS.GP != '':
+            errD_reg = _C.GAN_LOSS.REG_COEFF * magp(batch["image"], sent_embs, netD) if _C.GAN_LOSS.GP == "magp" else\
+                _C.GAN_LOSS.REG_COEFF * r1(batch["image"], netD)
             optD.zero_grad(), optG.zero_grad()
             errD_reg.backward()
-            if _C.OPTIM.D.CLIP_GRAD_NORM > 1.0:
-                torch.nn.utils.clip_grad_norm_(netD.parameters(), _C.OPTIM.D.CLIP_GRAD_NORM)
             optD.step()
 
         # Train Generator
@@ -277,7 +280,6 @@ def main(_A: argparse.Namespace):
 
         optD.zero_grad(), optG.zero_grad()
         errG.backward()
-        # todo add text encoder
         if _C.OPTIM.G.CLIP_GRAD_NORM > 1.0:
             torch.nn.utils.clip_grad_norm_(netG.parameters(), _C.OPTIM.G.CLIP_GRAD_NORM)
         optG.step()

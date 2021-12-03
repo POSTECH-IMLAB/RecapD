@@ -35,40 +35,43 @@ class Config(object):
 
         _C.RANDOM_SEED = 0
         _C.AMP = False
-        _C.CUDNN_DETERMINISTIC = False
         _C.CUDNN_BENCHMARK = True
+        _C.CUDNN_DETERMINISTIC = False
 
         # ---------------------------------------------------------------------
         #   Data paths and parameters related to dataloading.
         # ---------------------------------------------------------------------
         _C.DATA = CN()
-
         _C.DATA.ROOT = "datasets/coco"
-        _C.DATA.TOKENIZER_MODEL = "datasets/vocab/coco17_10k.model"
 
+        # Text
+        _C.DATA.TOKENIZER_MODEL = "datasets/vocab/coco14_10k.model"
+        _C.DATA.MAX_CAPTION_LENGTH = 30
         _C.DATA.VOCAB_SIZE = 10000 # 27297 for damsm
         _C.DATA.UNK_INDEX = 0
         _C.DATA.SOS_INDEX = 1
         _C.DATA.EOS_INDEX = 2
         _C.DATA.MASK_INDEX = 3
 
+        # Image
         _C.DATA.IMAGE_CROP_SIZE = 128 
-        _C.DATA.MAX_CAPTION_LENGTH = 30
-
         _C.DATA.CAPTION_PER_IMAGE = 5
-
         _C.DATA.IMAGE_TRANSFORM_TRAIN = [
             "random_resized_crop",
             "horizontal_flip",
             #"color_jitter",
             "normalize",
         ]
-
         _C.DATA.IMAGE_TRANSFORM_TEST = [
             "smallest_resize",
             "center_crop",
             "normalize",
         ]
+
+        # Train
+        _C.TRAIN = CN()
+        _C.TRAIN.BATCH_SIZE = 32 
+        _C.TRAIN.NUM_ITERATIONS = 300000
 
         # ---------------------------------------------------------------------
         #   Model architecture: visual backbone and textual head.
@@ -85,16 +88,17 @@ class Config(object):
         _C.GENERATOR.FEATURE_SIZE = 32
         
         _C.DISCRIMINATOR = CN()
-        _C.DISCRIMINATOR.NAME = "df"
+        _C.DISCRIMINATOR.NAME = "df" # "df", "capD"
+
         _C.DISCRIMINATOR.VISUAL = CN()
         _C.DISCRIMINATOR.VISUAL.NAME = "df" #"torchvision::resnet50" # "df"
-        _C.DISCRIMINATOR.VISUAL.FEATURE_SIZE = 512 #2048
+        _C.DISCRIMINATOR.VISUAL.FEATURE_SIZE = 32 #2048
+        _C.DISCRIMINATOR.VISUAL.DECODER = False 
         _C.DISCRIMINATOR.VISUAL.PRETRAINED = False 
         _C.DISCRIMINATOR.VISUAL.FROZEN = False
-        _C.DISCRIMINATOR.VISUAL.DECODER = False 
 
         _C.DISCRIMINATOR.LOGITOR = CN()
-        _C.DISCRIMINATOR.LOGITOR.NAME = "df"
+        _C.DISCRIMINATOR.LOGITOR.NAME = "df" # "df", "df_uncond"
         _C.DISCRIMINATOR.LOGITOR.H = 512 #2048
 
         _C.DISCRIMINATOR.TEXTUAL = CN()
@@ -115,21 +119,19 @@ class Config(object):
         #   our best model on bicaptioning task (COCO Captions).
         # ---------------------------------------------------------------------
 
-        _C.TRAIN = CN()
-        _C.TRAIN.BATCH_SIZE = 32 
-        _C.TRAIN.NUM_ITERATIONS = 300000
 
         _C.GAN_LOSS = CN()
         _C.GAN_LOSS.TYPE = "hinge"
-        _C.GAN_LOSS.D_LOSS_COMPONENT = "logit,magp"
-        _C.GAN_LOSS.G_LOSS_COMPONENT = "logit"
-        _C.GAN_LOSS.GP = True 
-        _C.GAN_LOSS.LOGIT_INPUT = "visual_features"
-        _C.GAN_LOSS.FA_FEATURE = "visual_features"
+        _C.GAN_LOSS.D_LOSS_COMPONENT = "cond_logit"
+        _C.GAN_LOSS.G_LOSS_COMPONENT = "cond_logit"
+        _C.GAN_LOSS.GP = "magp" 
+        _C.GAN_LOSS.FA_FEATURE = "dec_features" # "dec_features", "visual_features", "projected_features"
+        _C.GAN_LOSS.LOGIT_INPUT = "logit_features"
         _C.GAN_LOSS.LOGIT_STOP_GRAD = False
         _C.GAN_LOSS.CAP_STOP_GRAD = False
         _C.GAN_LOSS.SLOW_CAPG = False
         _C.GAN_LOSS.CAP_COEFF = 1.
+        _C.GAN_LOSS.REG_COEFF = 2.
         
         _C.OPTIM = CN()
         _C.OPTIM.G = CN()

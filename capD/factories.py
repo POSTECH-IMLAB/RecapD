@@ -85,7 +85,8 @@ class LogitorBackboneFactory(Factory):
     Possible choices: ``{"df", "proj" }``. 
     """
     PRODUCTS: Dict[str, Callable] = {
-        "df": logitor_backbones.DF_LOGIT, 
+        "df": logitor_backbones.DF_COND_LOGIT, 
+        "df_uncond": logitor_backbones.DF_UNCOND_LOGIT,
         #"proj"
     }
 
@@ -399,6 +400,7 @@ class VisualBackboneFactory(Factory):
     """
 
     PRODUCTS: Dict[str, Callable] = {
+        "torchvision": visual_backbones.TorchvisionVisualBackbone,
         "df": visual_backbones.DF_DISC,
     }
 

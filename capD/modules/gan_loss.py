@@ -7,7 +7,7 @@ from torch import nn
 import torch.nn.functional as F
 from capD.modules.embedding import RNN_ENCODER
 
-#import lpips
+import lpips
 
 def magp(img, sent, netD):
     img_inter = (img.data).requires_grad_()
@@ -28,6 +28,15 @@ def magp(img, sent, netD):
     return gp
 
 
+def r1(img, netD):
+    img_inter = (img.data).requires_grad_()
+    output_dict = netD(img_inter)
+    out = netD.logitor(output_dict["logit_features"])
+    grad_real = torch.autograd.grad(outputs = out.sum(), inputs = img_inter, create_graph=True)[0]
+    gp = grad_real.pow(2).view(grad_real.shape[0], -1).sum(1).mean()
+    return gp
+
+
 class GANLoss():
     def __init__(self,cfg):
         self.type = cfg.TYPE
@@ -39,11 +48,11 @@ class GANLoss():
         self.fa_feature = cfg.FA_FEATURE
 
         self.cap_coeff = cfg.CAP_COEFF 
+        self.reg_coeff = cfg.REG_COEFF
 
         if "img_rec" in self.d_loss_component:
-            #self.perceptual_fn = lpips.LPIPS(net="vgg").cuda()
-            #self.perceptual_fn.net.requires_grad_ = False
-            self.rec_fn = nn.MSELoss()
+            self.rec_fn = lpips.LPIPS(net="vgg").cuda()
+            #self.rec_fn = nn.MSELoss()
             
 
     def get_sent_embs(self, batch, text_encoder):
@@ -73,10 +82,10 @@ class GANLoss():
         return loss
         
 
-    def compute_gp(self, batch, sent_embs, netD) -> Dict[str, torch.Tensor]:
+    def compute_gp(self, image, sent_embs, netD) -> Dict[str, torch.Tensor]:
         loss = {}
-        errD_reg = magp(batch["image"], sent_embs, netD)
-        loss.update(errD_reg = 2 * errD_reg)
+        errD_reg = magp(image, sent_embs, netD) 
+        loss.update(errD_reg = self.reg_coeff * errD_reg)
         return loss
 
     def compute_d_loss(self, batch, sent_embs, fakes, netD) -> Dict[str, torch.Tensor]:
@@ -91,7 +100,8 @@ class GANLoss():
             kwargs["cap_stop_grad"] = self.cap_stop_grad
         real_dict = netD(**kwargs)
         fake_dict = netD(fakes.detach())
-        if "logit" in self.d_loss_component:
+
+        if "cond_logit" in self.d_loss_component:
             real_features = real_dict["logit_features"]
             fake_features = fake_dict["logit_features"]
             if self.logit_stop_grad:
@@ -110,6 +120,23 @@ class GANLoss():
             loss.update(
                 errD_real = errD_real,
                 errD_mis = 0.5 * errD_mis,
+                errD_fake = 0.5 * errD_fake,
+            )
+        elif "uncond_logit" in self.d_loss_component:
+            real_features = real_dict["logit_features"]
+            fake_features = fake_dict["logit_features"]
+            if self.logit_stop_grad:
+                real_features = real_features.detach()
+                fake_features = fake_features.detach() 
+            real_output = netD.logitor(real_features)
+            fake_output = netD.logitor(fake_features)
+            if self.type == "hinge":
+                errD_real =  F.relu(1.0 - real_output).mean()
+                errD_fake = F.relu(1.0 + fake_output).mean()
+            else:
+                raise NotImplementedError
+            loss.update(
+                errD_real = errD_real,
                 errD_fake = 0.5 * errD_fake,
             )
 
@@ -131,8 +158,6 @@ class GANLoss():
             errD_sent = self.contra_loss(img_feat, sent_feat)
             loss.update(errD_sent = errD_sent)
         
-        
-
         return loss, rec, cap
 
     def compute_g_loss(self, batch, sent_embs, fakes, netD) -> Dict[str, torch.Tensor]:
@@ -146,10 +171,17 @@ class GANLoss():
             fake_kwargs.update(batch=batch)
         fake_dict = netD(**fake_kwargs)
 
-        if 'logit' in self.g_loss_component:
+        if 'cond_logit' in self.g_loss_component:
             fake_output = netD.logitor(fake_dict["logit_features"], sent_embs)
             if self.type == "hinge":
                 errG_fake = -fake_output.mean() 
+            else:
+                raise NotImplementedError
+            loss.update(errG_fake = errG_fake)
+        elif "uncond_logit" in self.g_loss_component:
+            fake_output = netD.logitor(fake_dict["logit_features"])
+            if self.type == "hinge":
+                errG_fake = -fake_output.mean()
             else:
                 raise NotImplementedError
             loss.update(errG_fake = errG_fake)
@@ -161,7 +193,7 @@ class GANLoss():
 
         if 'img_fa' in self.g_loss_component:
             with torch.no_grad():
-                real_dict=netD(batch["image"])
+                real_dict = netD(batch["image"])
                 real_feat = real_dict[self.fa_feature]
             fake_feat = fake_dict[self.fa_feature]
             errG_fa = torch.abs(fake_feat-real_feat.detach()).mean()

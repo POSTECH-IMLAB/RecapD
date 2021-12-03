@@ -7,12 +7,12 @@ import torch.nn.functional as F
 
 class LogitorBackbone(nn.Module):
 
-    def __init__(self, H: int, cond_size: int, contra: bool):
+    def __init__(self, H: int, cond_size: int = 0, contra: bool = False):
         super().__init__()
         self.H = H 
         self.cond_size = cond_size
         self.contra = contra
-        self.proj_cond = nn.Linear(cond_size, 256) if cond_size != 256 else nn.Identity()
+        self.proj_cond = nn.Linear(cond_size, 256) if (cond_size != 256 and cond_size != 0) else nn.Identity()
         if self.contra:
             self.proj_img = nn.Linear(H, 256)
 
@@ -26,7 +26,7 @@ class LogitorBackbone(nn.Module):
         out = self.proj_cond(sent_embs)
         return out
 
-class DF_LOGIT(LogitorBackbone):
+class DF_COND_LOGIT(LogitorBackbone):
     def __init__(self, H:int = 32*16, cond_size:int = 256, contra:bool = False, **kwargs):
         super().__init__(H, cond_size, contra)
         self.conv_joint = nn.Sequential(
@@ -43,5 +43,15 @@ class DF_LOGIT(LogitorBackbone):
         out = self.conv_joint(x_c_code)
         return out
 
+class DF_UNCOND_LOGIT(LogitorBackbone):
+    def __init__(self, H:int = 32*16, **kwargs):
+        super().__init__(H)
+        self.conv_joint = nn.Sequential(
+            nn.Conv2d(H, H//8, 3, 1, 1, bias=False),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv2d(H//8, 1, 4, 1, 0, bias=False)
+        )
 
-#class PROJ_LOGIT
+    def forward(self, x, **kwargs):
+        out = self.conv_joint(x)
+        return out
