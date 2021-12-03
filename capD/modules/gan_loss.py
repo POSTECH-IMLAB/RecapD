@@ -148,7 +148,7 @@ class GANLoss():
         if "img_rec" in self.d_loss_component: 
             rec = netD.img_decoder(real_dict["dec_features"])
             #errD_rec = self.perceptual_fn(rec, batch["image"].detach()).mean()
-            errD_rec = self.rec_fn(rec, batch["image"].detach())
+            errD_rec = self.rec_fn(rec, batch["image"].detach()).mean()
             loss.update(errD_rec = errD_rec)
 
         if "sent_contra" in self.d_loss_component:
