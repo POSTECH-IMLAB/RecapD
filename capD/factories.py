@@ -160,6 +160,7 @@ class DiscriminatorFactory(Factory):
         # First two are basically the same. Added for shorthand notation.
         "capD": vmodels.CapD,
         "df": vmodels.DF_D,
+        "mat_uncond": vmodels.MAT_UNCOND
     }
 
     @classmethod
@@ -400,7 +401,7 @@ class VisualBackboneFactory(Factory):
     """
 
     PRODUCTS: Dict[str, Callable] = {
-        #"torchvision": visual_backbones.TorchvisionVisualBackbone,
+        "torchvision": visual_backbones.TorchvisionVisualBackbone,
         "df": visual_backbones.DF_DISC,
     }
 
@@ -417,6 +418,12 @@ class VisualBackboneFactory(Factory):
 
         _C = config
         kwargs = {"visual_feature_size": _C.DISCRIMINATOR.VISUAL.FEATURE_SIZE}
+        if "torchvision" in _C.DISCRIMINATOR.VISUAL.NAME:
+            # Check the name for models from torchvision.
+            cnn_name = _C.DISCRIMINATOR.VISUAL.NAME.split("::")[-1]
+            kwargs["pretrained"] = _C.DISCRIMINATOR.VISUAL.PRETRAINED
+            kwargs["frozen"] = _C.DISCRIMINATOR.VISUAL.FROZEN
+            return cls.create("torchvision", cnn_name, **kwargs)
         kwargs["img_size"] = _C.DATA.IMAGE_CROP_SIZE
         kwargs["H"] = _C.DISCRIMINATOR.LOGITOR.H
         return cls.create(_C.DISCRIMINATOR.VISUAL.NAME, **kwargs)

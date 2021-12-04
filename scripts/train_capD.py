@@ -130,10 +130,19 @@ def main(_A: argparse.Namespace):
     netD = DiscriminatorFactory.from_config(_C)
 
     # For loading pretrained model
-    if _C.DISCRIMINATOR.TEXTUAL.PRETRAINED or _C.TEXT_ENCODER == "virtex":
+    #if _C.DISCRIMINATOR.TEXTUAL.PRETRAINED or _C.TEXT_ENCODER == "virtex":
+    #    _V = Config("configs/bicaptioning_R_50_L1_H2048.yaml")
+    #    model = PretrainingModelFactory.from_config(_V) 
+    #    CheckpointManager(model=model).load("bicaptioning_R_50_L1_H2048.pth")
+    
+    pre_model = None
+    if "pre_cap" in _C.GAN_LOSS.G_LOSS_COMPONENT:
         _V = Config("configs/bicaptioning_R_50_L1_H2048.yaml")
-        model = PretrainingModelFactory.from_config(_V) 
-        CheckpointManager(model=model).load("bicaptioning_R_50_L1_H2048.pth")
+        pre_model = PretrainingModelFactory.from_config(_V) 
+        CheckpointManager(model=pre_model).load("bicaptioning_R_50_L1_H2048.pth")
+        pre_model.to(device)
+        pre_model.eval()
+        pre_model.requires_grad_(False)
 
     if  _C.DISCRIMINATOR.TEXTUAL.PRETRAINED:
         text_dict = model.textual.state_dict()
@@ -167,7 +176,7 @@ def main(_A: argparse.Namespace):
         text_encoder.requires_grad_(False)
         text_encoder.eval()
 
-    gan_loss = GANLoss(_C.GAN_LOSS)
+    gan_loss = GANLoss(_C.GAN_LOSS, pre_model)
 
     g_param_group = []
     for name, param in netG.named_parameters():
@@ -299,9 +308,13 @@ def main(_A: argparse.Namespace):
 
             if rec is not None:
                 vutils.save_image(rec.data, f'rec.png', normalize=True, scale_each=True)
-            if "cap" in _C.GAN_LOSS.D_LOSS_COMPONENT:
+            if "cap" in _C.GAN_LOSS.D_LOSS_COMPONENT or "pre_cap" in _C.GAN_LOSS.G_LOSS_COMPONENT:
                 logger.info(train_dataset.tokenizer.decode(batch["caption_tokens"][0].detach().tolist()))
-                logger.info(train_dataset.tokenizer.decode(cap_real[0].detach().tolist()))
+                if cap_real is None:
+                    with torch.no_grad():
+                        out_dict = pre_model(batch["image"], batch)
+                        cap_real = out_dict["predictions"]
+                logger.info(train_dataset.tokenizer.decode(cap_real[0].detach().tolist())) 
                 logger.info(train_dataset.tokenizer.decode(cap_fake[0].detach().tolist())) if cap_fake is not None else None
 
             if _A.config == "configs/debug.yaml":
