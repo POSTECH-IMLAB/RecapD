@@ -119,10 +119,10 @@ def main(_A: argparse.Namespace):
             im = im.astype(np.uint8)
             im = np.transpose(im, (1,2,0))
             im =  Image.fromarray(im)
-            fullpath = os.path.join(save_dir, f'{batch["image_id"][j]}.png')
+            fullpath = os.path.join(save_dir, f'{test_dataset.tokenizer.decode(batch["caption_tokens"][j][:50].detach().tolist())}_{batch["image_id"][j]}.png')
             im.save(fullpath)
             cnt += 1
-            if cnt >= 40000:
+            if cnt >= 30000:
                 cond = True
                 break
         if cond:
