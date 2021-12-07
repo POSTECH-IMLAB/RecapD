@@ -38,7 +38,7 @@ def r1(img, netD):
 
 
 class GANLoss():
-    def __init__(self,cfg):
+    def __init__(self, cfg, pre_model):
         self.type = cfg.TYPE
         self.d_loss_component = cfg.D_LOSS_COMPONENT.split(',')
         self.g_loss_component = cfg.G_LOSS_COMPONENT.split(',')
@@ -50,6 +50,7 @@ class GANLoss():
         self.cap_coeff = cfg.CAP_COEFF 
         self.reg_coeff = cfg.REG_COEFF
 
+        self.pre_model = pre_model
         if "img_rec" in self.d_loss_component:
             self.rec_fn = lpips.LPIPS(net="vgg").cuda()
             #self.rec_fn = nn.MSELoss()
@@ -98,6 +99,9 @@ class GANLoss():
         if "cap" in self.d_loss_component:
             kwargs["batch"] = batch
             kwargs["cap_stop_grad"] = self.cap_stop_grad
+        elif "mat" in self.d_loss_component:
+            kwargs["sent_embs"] = sent_embs
+
         real_dict = netD(**kwargs)
         fake_dict = netD(fakes.detach())
 
@@ -144,6 +148,10 @@ class GANLoss():
             errD_cap = real_dict["cap_loss"]
             cap = real_dict["predictions"]
             loss.update(errD_cap = self.cap_coeff * errD_cap)
+        elif "mat" in self.d_loss_component:
+            errD_mat = real_dict["mat_loss"]
+            loss.update(errD_mat = errD_mat)
+            
         
         if "img_rec" in self.d_loss_component: 
             rec = netD.img_decoder(real_dict["dec_features"])
@@ -169,6 +177,8 @@ class GANLoss():
         fake_kwargs = {"image":fakes}
         if 'cap' in self.g_loss_component or self.fa_feature == "projected_visual_features":
             fake_kwargs.update(batch=batch)
+        elif "mat" in self.g_loss_component:
+            fake_kwargs.update(sent_embs=sent_embs)
         fake_dict = netD(**fake_kwargs)
 
         if 'cond_logit' in self.g_loss_component:
@@ -190,6 +200,14 @@ class GANLoss():
             errG_cap = fake_dict["cap_loss"]
             cap = fake_dict["predictions"]
             loss.update(errG_cap = self.cap_coeff * errG_cap)
+        elif "pre_cap" in self.g_loss_component:
+            out_dict = self.pre_model(fakes, batch)
+            errG_pre_cap = out_dict["loss"]
+            cap = out_dict["predictions"]
+            loss.update(errG_pre_cap = self.cap_coeff * errG_pre_cap)
+        elif "mat" in self.g_loss_component:
+            errG_mat = fake_dict["mat_loss"]
+            loss.update(errG_mat = errG_mat)
 
         if 'img_fa' in self.g_loss_component:
             with torch.no_grad():

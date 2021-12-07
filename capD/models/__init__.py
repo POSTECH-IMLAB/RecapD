@@ -6,7 +6,8 @@ from .captioning import (
 
 from .discriminator import (
     CapD,
-    DF_D
+    DF_D,
+    MAT_UNCOND
 )
 
 

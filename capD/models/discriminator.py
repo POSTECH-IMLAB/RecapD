@@ -4,6 +4,7 @@ from typing import Any, Dict
 
 import torch
 from torch import nn
+import torch.nn.functional as F
 
 from capD.data.tokenizers import SentencePieceBPETokenizer
 from capD.modules.textual_heads import TextualHead
@@ -24,6 +25,98 @@ class DiscriminatorModel(nn.Module):
 
     def forward(self, image: torch.Tensor, **kwargs) -> Dict[str, Any]:
         raise NotImplementedError
+
+
+class MLPMatchingTextualHead(nn.Module):
+    def __init__(self, ):
+        super().__init__()
+        #TODO
+        visual_feature_size = 512
+        hidden_size = 256 #damsm 
+
+        self.output = nn.Sequential(
+            nn.Linear(visual_feature_size, hidden_size),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Linear(hidden_size, hidden_size)
+        )
+
+    def forward(
+        self,
+        visual_features: torch.Tensor,
+    ) -> torch.Tensor:
+        r"""
+        Project visual features directly to predict a distribution over
+        vocabulary tokens through a single linear layer. This textual head
+        ignores arguments ``caption_tokens`` and ``caption_lengths``, they
+        are here for API consistency.
+        Args:
+            visual_features: A tensor of shape ``(batch_size, channels, height,
+                width)`` containing features from visual backbone.
+        Returns:
+            A tensor of shape ``(batch_size, vocab_size)`` containing output
+            vocabulary logits.
+        """
+
+        # Convert to NHWC and project visual features to textual feature size.
+        batch_size, channels, _, _ = visual_features.size()
+        visual_features = visual_features.view(batch_size, channels, -1)
+        visual_features = visual_features.permute(0, 2, 1)
+
+        # Perform global average pooling of visual features.
+        # shape: (batch_size, channels)
+        visual_features = visual_features.mean(dim=1)
+
+        # shape: (batch_size, 256)
+        proj_features = self.output(visual_features)
+        return proj_features 
+
+class MAT_UNCOND(DiscriminatorModel):
+    def __init__(
+        self,
+        visual: VisualBackbone,
+        logitor: LogitorBackbone,
+        img_decoder: Any = None,
+    ):
+        super().__init__(visual, logitor, img_decoder)
+        self.output = MLPMatchingTextualHead()
+
+
+    def forward(
+        self,
+        image: torch.Tensor,
+        sent_embs: torch.Tensor = None,
+        **kwargs,
+    ) -> Dict[str, Any]:
+        output_dict = {}
+        labels = torch.diag(torch.ones(image.size(0))).cuda().detach()
+
+        # shape: (batch_size, channels, height, width)
+        logit_features, dec_features, visual_features = self.visual(image, return_features=True)
+
+        output_dict["logit_features"] = logit_features
+        output_dict["dec_features"] = dec_features
+        output_dict["visual_features"] = visual_features
+
+        if sent_embs is not None:
+            img_embs = self.output(visual_features)
+            sent_norm = F.normalize(sent_embs, p=2, dim=1)
+            img_norm = F.normalize(img_embs, p=2, dim=1)
+
+            scores = torch.mm(sent_norm, img_norm.T) * 10
+
+            s0 = F.log_softmax(scores, dim=0)
+            s0 = s0 * labels
+            s0 = - (s0.sum(0))
+            s0 = s0.mean()
+
+            s1 = F.log_softmax(scores, dim=1)
+            s1 = s1 * labels
+            s1 = - (s1.sum(1))
+            s1 = s1.mean()
+
+            loss = s0 + s1
+            output_dict["mat_loss"] = loss
+        return output_dict
 
 class DF_D(DiscriminatorModel):
     def __init__(
@@ -80,7 +173,8 @@ class CapD(DiscriminatorModel):
         self, 
         image: torch.Tensor, 
         batch: Dict[str, torch.Tensor] = {},
-        cap_stop_grad: bool = False, 
+        cap_stop_grad: bool = False,
+        **kwargs,
     ) -> Dict[str, Any]:
 
         # Compute features and captioning loss                
