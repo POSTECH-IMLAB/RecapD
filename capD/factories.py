@@ -283,7 +283,8 @@ class ImageTransformsFactory(Factory):
         # Input resize transforms: whenever selected, these are always applied.
         # These transforms require one position argument: image dimension.
         "random_resized_crop": partial(
-            T.RandomResizedSquareCrop, scale=(0.2, 1.0), ratio=(0.75, 1.333), p=1.0
+            #T.RandomResizedSquareCrop, scale=(0.2, 1.0), ratio=(0.75, 1.333), p=1.0
+            T.RandomResizedSquareCrop, scale=(0.8, 1.0), ratio=(0.75, 1.333), p=1.0
         ),
         "center_crop": partial(T.CenterSquareCrop, p=1.0),
         "smallest_resize": partial(alb.SmallestMaxSize, p=1.0),
