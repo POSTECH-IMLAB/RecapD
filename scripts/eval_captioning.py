@@ -1,18 +1,21 @@
 import argparse
 import json
 import os
+import sys
 from typing import Any, Dict, List
 
+sys.path.append(os.path.abspath(__file__).split("scripts")[0])
 from loguru import logger
 import torch
 from torch.utils.data import DataLoader
 
 from capD.config import Config
 from capD.data import ImageDirectoryDataset
-from capD.factories import TokenizerFactory, PretrainingModelFactory
+from capD.factories import DiscriminatorFactory, TokenizerFactory, PretrainingModelFactory
 from capD.utils.checkpointing import CheckpointManager
 from capD.utils.common import common_parser
 from capD.utils.metrics import CocoCaptionsEvaluator
+from tqdm import tqdm
 
 
 # fmt: off
@@ -21,16 +24,12 @@ parser = common_parser(
     evaluate pretrained model on COCO Captions val2017 split."""
 )
 parser.add_argument(
-    "--images", "--data-root", default=None,
+    "--data-root", default="/work/val2014",
     help="""Path to a directory containing image files to generate captions for.
     Default: COCO val2017 image directory as expected relative to project root."""
 )
 parser.add_argument(
-    "--checkpoint-path", required=True,
-    help="Path to load checkpoint and run captioning evaluation."
-)
-parser.add_argument(
-    "--output", default=None,
+    "--output", default="fake.json",
     help="Path to save predictions as a JSON file."
 )
 parser.add_argument(
@@ -50,8 +49,8 @@ def main(_A: argparse.Namespace):
         # Get the current device (this will be zero here by default).
         device = torch.cuda.current_device()
 
-    _C = Config(_A.config, _A.config_override)
-
+    #_C = Config(_A.config, _A.config_override)
+    _C = Config("configs/bicaptioning_R_50_L1_H2048.yaml")
     tokenizer = TokenizerFactory.from_config(_C)
 
     if _A.data_root is None:
@@ -59,23 +58,38 @@ def main(_A: argparse.Namespace):
 
     val_dataloader = DataLoader(
         ImageDirectoryDataset(_A.data_root),
-        batch_size=_C.OPTIM.BATCH_SIZE,
+        batch_size=24,
         num_workers=_A.cpu_workers,
         pin_memory=True,
     )
     # Initialize model from a checkpoint.
-    model = PretrainingModelFactory.from_config(_C).to(device)
-    ITERATION = CheckpointManager(model=model).load(_A.checkpoint_path)
-    model.eval()
+    #netD = DiscriminatorFactory.from_config(_C).to(device)
+    #ITERATION = CheckpointManager(netD=netD).load("exps/df256_capGD/checkpoint_413880.pth")
+    #netD.eval()
+    netD = PretrainingModelFactory.from_config(_C) 
+    ITERATION = CheckpointManager(model=netD).load("bicaptioning_R_50_L1_H2048.pth")
+    netD.to(device)
+    netD.eval()
+    netD.requires_grad_(False)
+
+
+    captions = json.load(
+        open(os.path.join("datasets/coco", "annotations", f"captions_val2014.json"))
+    )
+
+    path2id: Dict[int, str] = {
+        im["file_name"].replace(".jpg", ""): im["id"]
+        for im in captions["images"]
+    }
 
     # Make a list of predictions to evaluate.
     predictions: List[Dict[str, Any]] = []
 
-    for val_iteration, val_batch in enumerate(val_dataloader, start=1):
+    for val_batch in tqdm(val_dataloader):
 
         val_batch["image"] = val_batch["image"].to(device)
         with torch.no_grad():
-            output_dict = model(val_batch)
+            output_dict = netD(val_batch["image"])
 
         # Make a dictionary of predictions in COCO format.
         for image_id, caption in zip(
@@ -84,7 +98,7 @@ def main(_A: argparse.Namespace):
             predictions.append(
                 {
                     # Convert image id to int if possible (mainly for COCO eval).
-                    "image_id": int(image_id) if image_id.isdigit() else image_id,
+                    "image_id": path2id[image_id[-25:]],
                     "caption": tokenizer.decode(caption.tolist()),
                 }
             )
@@ -95,13 +109,13 @@ def main(_A: argparse.Namespace):
 
     # Save predictions as a JSON file if specified.
     if _A.output is not None:
-        os.makedirs(os.path.dirname(_A.output), exist_ok=True)
+        #os.makedirs(os.path.dirname(_A.output), exist_ok=True)
         json.dump(predictions, open(_A.output, "w"))
         logger.info(f"Saved predictions to {_A.output}")
 
     # Calculate CIDEr and SPICE metrics using ground truth COCO Captions. This
     # should be skipped when running inference on arbitrary images.
-    if _A.calc_metrics:
+    if True or _A.calc_metrics:
         # Assume ground truth (COCO val2017 annotations) exist.
         gt = os.path.join(_C.DATA.ROOT, "annotations", "captions_val2014.json")
 
