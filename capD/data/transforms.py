@@ -196,8 +196,8 @@ r"""ImageNet color normalization std in RGB format (values in 0-1)."""
 DEFAULT_IMAGE_TRANSFORM = alb.Compose(
     [
         alb.SmallestMaxSize(256, p=1.0),
-        CenterSquareCrop(224, p=1.0),
-        alb.Normalize(mean=IMAGENET_COLOR_MEAN, std=IMAGENET_COLOR_STD, p=1.0),
+        CenterSquareCrop(256, p=1.0),
+        alb.Normalize(mean=(0.5,0.5,0.5), std=(0.5,0.5,0.5), p=1.0),
     ]
 )
 r"""Default transform without any data augmentation (during pretraining)."""
