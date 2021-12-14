@@ -67,7 +67,7 @@ def main(_A: argparse.Namespace):
     dataloader = DataLoader(
         test_dataset,
         batch_size=batch_size,
-        shuffle=False,
+        shuffle=True,
         num_workers=_A.cpu_workers,
         pin_memory=True,
         drop_last=True,
