@@ -2,7 +2,7 @@
 
 [Improving Text-to-Image Generation by Discriminator with Recaption Ability]()
 
-<img src="framework.png" witdh="900px" height="448px"/>
+<img src="framework.png" witdh="900px" height="250px"/>
 
 ### Installation
 
@@ -44,7 +44,7 @@ python scripts/gen_recapD.py --resume-from exps/256_cond_cap/checkpoint.pth
 ```
 Generated samples
 
-<img src="samples.png" witdh="900px" height="448px"/>
+<img src="samples.png" witdh="900px" height="250px"/>
 
 ### Reference
 The code is based on [DF-GAN](https://github.com/tobran/DF-GAN) and [VirTex](https://github.com/kdexd/virtex)
