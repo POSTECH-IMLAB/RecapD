@@ -117,7 +117,7 @@ def common_parser(description: str = "") -> argparse.ArgumentParser:
 
     # fmt: off
     parser.add_argument(
-        "--config", metavar="FILE", default="configs/debug.yaml",
+        "--config", metavar="FILE", default="configs/df256/cond_cap.yaml",
         help="Path to a pretraining config file."
     )
     parser.add_argument(
