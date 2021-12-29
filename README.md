@@ -37,7 +37,7 @@ python scripts/train_recapD.py
 ```
 
 ### Test RecapD
-Download pretrained RecapD and save it to ```exps/256_cond_cap/checkpoint.pth```
+Download [pretrained RecapD](https://drive.google.com/file/d/1or9fpMC6-cCVCGol39f_kOI1Vc0fZvBT/view?usp=sharing) and save it to ```exps/256_cond_cap/checkpoint.pth```
 Add text for generation in ```example_sentences.txt``` 
 ```
 python scripts/gen_recapD.py --resume-from exps/256_cond_cap/checkpoint.pth
