@@ -96,7 +96,7 @@ class WordAndPositionalEmbedding(nn.Module):
 # ############## Text2Image Encoder-Decoder #######
 class RNN_ENCODER(nn.Module):
     def __init__(self, ntoken=27297, ninput=300, drop_prob=0.5,
-                 nhidden=256, nlayers=1, bidirectional=True):
+                 nhidden=256, nlayers=1, bidirectional=True, **kwargs):
         super(RNN_ENCODER, self).__init__()
         self.n_steps = 18 
         self.ntoken = ntoken  # size of the dictionary
