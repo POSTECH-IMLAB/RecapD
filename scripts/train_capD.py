@@ -376,21 +376,21 @@ def main(_A: argparse.Namespace):
 
                         #tensorboard_writer.add_text("captioning",f"{org} \n\n{real} \n\n{fake}")
 
-                    for metric in metrics:
-                        kwargs = {"metric": metric, "G":netG_ema, "text_encoder":text_encoder, "data_loader": test_dataloader, "batch_size":batch_size, "device":device}
-                        if "clip" or "damsm" in metric:
-                            kwargs["encoder"] = model
-                        result_dict = calc_metric(**kwargs)
-                        for key in result_dict["results"]:
-                            log = f"{iteration} | Eval metrics, {key}: {result_dict['results'][key].detach()}"
-                            if _A.logging == "wb":
-                                logger.info(log)
-                                wandb.log({key: result_dict["results"][key]}, step=iteration)
-                            elif _A.logging == "tb":
-                                logger.info(log)
-                                tensorboard_writer.add_scalar(key, result_dict["results"][key], iteration)
-                            else:
-                                logger.bind(metric=True).info(log)
+                    # for metric in metrics:
+                    #     kwargs = {"metric": metric, "G":netG_ema, "text_encoder":text_encoder, "data_loader": test_dataloader, "batch_size":batch_size, "device":device}
+                    #     if "clip" or "damsm" in metric:
+                    #         kwargs["encoder"] = model
+                    #     result_dict = calc_metric(**kwargs)
+                    #     for key in result_dict["results"]:
+                    #         log = f"{iteration} | Eval metrics, {key}: {result_dict['results'][key].detach()}"
+                    #         if _A.logging == "wb":
+                    #             logger.info(log)
+                    #             wandb.log({key: result_dict["results"][key]}, step=iteration)
+                    #         elif _A.logging == "tb":
+                    #             logger.info(log)
+                    #             tensorboard_writer.add_scalar(key, result_dict["results"][key], iteration)
+                    #         else:
+                    #             logger.bind(metric=True).info(log)
 
 
 if __name__ == "__main__":
