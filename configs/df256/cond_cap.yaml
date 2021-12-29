@@ -1,0 +1,89 @@
+RANDOM_SEED: 256 
+AMP: false
+CUDNN_BENCHMARK: true
+CUDNN_DETERMINISTIC: false
+
+DATA:
+  ROOT: datasets/coco
+  # Text
+  TOKENIZER_MODEL: datasets/vocab/coco14_10k.model
+  MAX_CAPTION_LENGTH: 30
+  VOCAB_SIZE: 10000
+  UNK_INDEX: 0
+  SOS_INDEX: 1
+  EOS_INDEX: 2
+  MASK_INDEX: 3
+  # Image
+  IMAGE_CROP_SIZE: 256 
+  IMAGE_TRANSFORM_TRAIN:
+  - random_resized_crop
+  - horizontal_flip
+  - normalize
+  IMAGE_TRANSFORM_TEST:
+  - smallest_resize
+  - center_crop
+  - normalize
+TRAIN:
+  BATCH_SIZE: 24 
+  NUM_ITERATIONS: 413880 # 120 epochs 
+
+# Model
+TEXT_ENCODER:
+  NAME: damsm
+  DIR: datasets/DAMSMencoders/text_encoder100.pth
+  EMBEDDING_SIZE: 256
+  FROZEN: true
+
+GENERATOR:
+  NAME: df
+  FEATURE_SIZE: 32 
+  NOISE_SIZE: 100
+
+DISCRIMINATOR:
+  NAME: capD #capD #df 
+  VISUAL:
+    NAME: df
+    FEATURE_SIZE: 32 
+    DECODER: false 
+    FROZEN: false
+    PRETRAINED: false
+  LOGITOR:
+    NAME: df # df df_uncond
+    H: 512
+  TEXTUAL:
+    # A=H/64, F=4*H
+    NAME: transdec_postnorm::L1_H512_A8_F2048
+    CAPTION_BACKWARD: true 
+    FROZEN: false
+    PRETRAINED: false
+  
+GAN_LOSS:
+  TYPE: hinge
+  D_LOSS_COMPONENT: cond_logit,cap # cond_logit, uncond_logit, cap, img_rec
+  G_LOSS_COMPONENT: cond_logit,cap # cond_logit, uncond_logit, cap, img_fa
+  CAP_COEFF: 1.
+  GP: magp # magp, r1 
+  REG_COEFF: 1.
+  FA_FEATURE: dec_features # dec_features, logit_features, visual_features
+  LOGIT_INPUT: logit_features 
+  LOGIT_STOP_GRAD: false
+
+OPTIM:
+  D:
+    BETAS:
+    - 0.0
+    - 0.9
+    CLIP_GRAD_NORM: 10.0
+    OPTIMIZER_NAME: adam
+    TEXT_LR: 0.0004
+    VISUAL_LR: 0.0004
+    UPDATE_EMB: false
+  G:
+    BETAS:
+    - 0.0
+    - 0.9
+    CLIP_GRAD_NORM: 10.0
+    OPTIMIZER_NAME: adam
+    TEXT_LR: 0.0001
+    VISUAL_LR: 0.0001
+    UPDATE_EMB: false
