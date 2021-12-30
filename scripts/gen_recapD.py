@@ -32,7 +32,7 @@ parser = common_parser(
 )
 group = parser.add_argument_group("Checkpointing and Logging")
 group.add_argument(
-    "--resume-from", default="exps/256_cond_cap/checkpoint_413880.pth",
+    "--resume-from", default="exps/256_cond_cap/checkpoint.pth",
     help="Path to a checkpoint to resume training from (if provided)."
 )
 group.add_argument(
