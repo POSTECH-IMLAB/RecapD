@@ -56,6 +56,12 @@ python scripts/train_recapD.py
 
 ### Test RecapD
 Download [pretrained RecapD](https://drive.google.com/file/d/1or9fpMC6-cCVCGol39f_kOI1Vc0fZvBT/view?usp=sharing) and save it to ```exps/256_cond_cap/checkpoint.pth```
+```
+export PROJECT_DIR=~/RecapD # path for project dir
+cd exps/256_cond_cap
+gdown https://drive.google.com/uc?id=1or9fpMC6-cCVCGol39f_kOI1Vc0fZvBT
+cd $PROJECT_DIR
+```
 Note that the words in the text should be in the vocabulary of DAMSM text encoder 
 
 - Generate an image from a sentence
