@@ -13,7 +13,9 @@ git clone https://github.com/POSTECH-IMLAB/RecapD.git
 - Create conda enviroment and install all the dependencies
 ```
 cd RecapD
-conda env create --file env.yaml
+conda create -n recapD python=3.6
+conda activate recapD
+pip install -r requirements.txt
 ```
 
 ### Preparation
