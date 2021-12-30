@@ -20,9 +20,25 @@ pip install -r requirements.txt
 
 ### Preparation
 1. Download the preprocessed metadata for [coco](https://drive.google.com/open?id=1rSnbIGNDGZeHlsUlLdahj0RJ9oo6lgH9) and save them to ```datasets/```
+```
+export PROJECT_DIR=~/RecapD # path for project dir
+mkdir datasets
+cd datasets
+gdown https://drive.google.com/uc?id=1rSnbIGNDGZeHlsUlLdahj0RJ9oo6lgH9
+unzip coco.zip
+cd $PROJECT_DIR
+```
 2. Download [coco](http://cocodataset.org/#download) dataset and extract the images and annotations to ```datasets/coco```
 3. Download the [pre-trained text encoder](https://drive.google.com/open?id=1zIrXCE9F6yfbEJIbNP5-YrEe2pZcPSGJ) for coco and save it to ```datasets/DAMSMencoders/coco```
-4. Build vocabulary for recaptioning model
+```
+cd $PROJECT_DIR/datasets
+mkdir DAMSMencoders
+cd DAMSMencoders
+gdown https://drive.google.com/uc?id=1zIrXCE9F6yfbEJIbNP5-YrEe2pZcPSGJ
+unzip coco.zip
+cd $PROJECT_DIR
+```
+5. Build vocabulary for recaptioning model
   ```
   python scripts/build_vocabularay.py \
          --captions datasets/coco/annotations/captions_train2014.json \
