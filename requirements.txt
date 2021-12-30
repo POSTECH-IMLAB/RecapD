@@ -14,3 +14,4 @@ tqdm>=4.50.0
 nltk
 git+git://github.com/facebookresearch/fvcore.git#egg=fvcore
 git+git://github.com/cocodataset/cocoapi.git#subdirectory=PythonAPI
+gdown
